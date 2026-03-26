@@ -1,27 +1,19 @@
 ## Ignazio De Santis — Software Engineer & AI Systems Builder
 
-I design and ship production AI systems that replace or augment manual workflows — from LLM-powered pipelines and RAG search engines to full-stack products with real users.
+I design and ship production AI systems — from LLM pipelines and RAG engines to full-stack products with real users. I also contribute to open-source projects in the AI tooling and developer experience space.
 
 Currently based in Guangzhou, CN. Available for contract engagements.
 
 ---
 
-### What I build
+### Open Source Contributions
 
-**AI & LLM Systems**
-- Retrieval-Augmented Generation (RAG) pipelines with multi-cloud deployments
-- Autonomous agent architectures for task automation
-- Evaluation harnesses and quality gates for LLM outputs
-
-**Full-Stack Products**
-- REST APIs and backend services (Python / FastAPI / SQLite / PostgreSQL)
-- React dashboards and operator UIs
-- Browser automation and structured data extraction
-
-**Infrastructure**
-- Containerized single-node deployments
-- OpenTelemetry observability, Sentry error tracking, Redis/RQ queues
-- Stripe payment integration and webhook reconciliation
+| Project | Area | What I work on |
+|---|---|---|
+| [learnhouse](https://github.com/learnhouse/learnhouse) | EdTech / Next.js | Accessibility improvements, keyboard navigation, ARIA support |
+| [lmnr](https://github.com/lmnr-ai/lmnr) | AI Observability | Dashboard UI features and widget system |
+| [Kiln](https://github.com/Kiln-AI/Kiln) | AI Evaluation & Fine-tuning | i18n, frontend improvements |
+| [LitServe](https://github.com/Lightning-AI/LitServe) | AI Inference Serving | Python backend, performance fixes |
 
 ---
 
@@ -37,18 +29,32 @@ Currently based in Guangzhou, CN. Available for contract engagements.
 
 ---
 
+### What I build
+
+**AI & LLM Systems** — RAG pipelines, autonomous agents, evaluation harnesses, LLM quality gates
+
+**Full-Stack Products** — FastAPI/Python backends, React dashboards, browser automation, structured data extraction
+
+**Infrastructure** — Docker deployments, OpenTelemetry observability, Sentry, Redis/RQ, Stripe integrations
+
+---
+
 ### Stack
 
 ![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/React-61DAFB?style=flat&logo=react&logoColor=black)
+![Next.js](https://img.shields.io/badge/Next.js-000000?style=flat&logo=nextdotjs&logoColor=white)
 ![LangChain](https://img.shields.io/badge/LangChain-1C3C3C?style=flat&logo=langchain&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql&logoColor=white)
-![SQLite](https://img.shields.io/badge/SQLite-003B57?style=flat&logo=sqlite&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
 ![Anthropic](https://img.shields.io/badge/Anthropic%20Claude-D97706?style=flat&logoColor=white)
 ![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=flat&logo=openai&logoColor=white)
+
+<p align="center">
+  <img src="https://github-readme-stats.vercel.app/api?username=IgnazioDS&show_icons=true&theme=default&hide_border=true&count_private=true" alt="GitHub Stats" />
+</p>
 
 ---
 
