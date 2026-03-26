@@ -1,96 +1,62 @@
 <svg width="1200" height="320" viewBox="0 0 1200 320" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <!-- Background gradient matching website --bg tokens -->
     <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="320" gradientUnits="userSpaceOnUse">
       <stop stop-color="#09090b"/>
       <stop offset="0.5" stop-color="#0d0d0f"/>
       <stop offset="1" stop-color="#111114"/>
     </linearGradient>
-
-    <!-- Red-orange accent gradient matching --cobalt tokens -->
-    <linearGradient id="accent" x1="52" y1="258" x2="420" y2="258" gradientUnits="userSpaceOnUse">
+    <linearGradient id="accent" x1="52" y1="204" x2="108" y2="204" gradientUnits="userSpaceOnUse">
       <stop stop-color="#C0392B"/>
       <stop offset="1" stop-color="#E84637"/>
     </linearGradient>
-
-    <!-- Warm glow for decorative orbs -->
     <filter id="glow">
       <feGaussianBlur stdDeviation="40"/>
     </filter>
     <filter id="glow-sm">
       <feGaussianBlur stdDeviation="24"/>
     </filter>
-
-    <!-- Grid pattern matching website hero background-image -->
     <pattern id="grid" width="72" height="72" patternUnits="userSpaceOnUse">
-      <path d="M72 0V72M0 72H72" stroke="#E84637" stroke-opacity="0.025" stroke-width="1"/>
+      <path d="M72 0V72M0 72H72" stroke="#E84637" stroke-opacity="0.03" stroke-width="1"/>
     </pattern>
   </defs>
 
-  <!-- Base fill -->
+  <!-- Base -->
   <rect width="1200" height="320" rx="16" fill="url(#bg)"/>
-
-  <!-- Subtle grid texture (matches hero section) -->
   <rect width="1200" height="320" rx="16" fill="url(#grid)"/>
 
-  <!-- Decorative orbs (matches hero-orb style with red-orange glow) -->
-  <circle cx="900" cy="80" r="120" fill="#E84637" fill-opacity="0.04" filter="url(#glow)"/>
+  <!-- Decorative orbs -->
+  <circle cx="920" cy="90" r="120" fill="#E84637" fill-opacity="0.04" filter="url(#glow)"/>
   <circle cx="1100" cy="260" r="80" fill="#C4783A" fill-opacity="0.04" filter="url(#glow-sm)"/>
   <circle cx="160" cy="280" r="60" fill="#E84637" fill-opacity="0.025" filter="url(#glow-sm)"/>
 
-  <!-- Large background watermark number (matches .hero-bg-num style) -->
-  <text x="1020" y="290" fill="none" stroke="#E84637" stroke-opacity="0.05" stroke-width="1"
-        font-family="'Space Grotesk', 'Inter', sans-serif" font-size="260" font-weight="700"
-        letter-spacing="-0.04em">01</text>
+  <!-- Background watermark -->
+  <text x="1020" y="290" fill="none" stroke="#E84637" stroke-opacity="0.05" stroke-width="1" font-family="Space Grotesk, Inter, sans-serif" font-size="260" font-weight="700" letter-spacing="-0.04em">01</text>
 
-  <!-- Eyebrow pill (matches .hero-eyebrow) -->
-  <rect x="52" y="42" width="216" height="28" rx="14" fill="rgba(255,255,255,0.025)"
-        stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
-  <!-- Status dot -->
+  <!-- Eyebrow pill -->
+  <rect x="52" y="42" width="216" height="28" rx="14" fill="#0d0d0f" stroke="#ffffff" stroke-opacity="0.06" stroke-width="1"/>
   <circle cx="68" cy="56" r="3.5" fill="#22c55e"/>
-  <text x="80" y="60" fill="#858585"
-        font-family="'JetBrains Mono', 'Courier New', monospace" font-size="10"
-        letter-spacing="0.12em" text-transform="uppercase">SOFTWARE ENGINEER</text>
+  <text x="80" y="60" fill="#858585" font-family="JetBrains Mono, Courier New, monospace" font-size="10" letter-spacing="1.2">SOFTWARE ENGINEER</text>
 
-  <!-- Name (matches .hero-name with Space Grotesk) -->
-  <text x="52" y="128" fill="#f2f2f2"
-        font-family="'Space Grotesk', 'Inter', sans-serif" font-size="56" font-weight="700"
-        letter-spacing="-0.04em">Ignazio</text>
-  <text x="52" y="186" fill="#858585"
-        font-family="'Space Grotesk', 'Inter', sans-serif" font-size="56" font-weight="700"
-        letter-spacing="-0.04em">De Santis.</text>
+  <!-- Name -->
+  <text x="52" y="128" fill="#f2f2f2" font-family="Space Grotesk, Inter, sans-serif" font-size="56" font-weight="700" letter-spacing="-2.2">Ignazio</text>
+  <text x="52" y="186" fill="#858585" font-family="Space Grotesk, Inter, sans-serif" font-size="56" font-weight="700" letter-spacing="-2.2">De Santis.</text>
 
-  <!-- Accent rule (matches .hero-rule) -->
-  <rect x="52" y="204" width="56" height="2" rx="1" fill="#E84637"/>
+  <!-- Accent rule -->
+  <rect x="52" y="204" width="56" height="2" rx="1" fill="url(#accent)"/>
 
-  <!-- Subtitle (matches .hero-sub) -->
-  <text x="52" y="240" fill="#858585"
-        font-family="'Inter', -apple-system, sans-serif" font-size="17" font-weight="400">
-    I build AI systems that ship. LLM infrastructure, full-stack products,
-  </text>
-  <text x="52" y="264" fill="#858585"
-        font-family="'Inter', -apple-system, sans-serif" font-size="17" font-weight="400">
-    and software that holds together in production.
-  </text>
+  <!-- Subtitle -->
+  <text x="52" y="240" fill="#858585" font-family="Inter, sans-serif" font-size="17" font-weight="400">I build AI systems that ship. LLM infrastructure, full-stack products,</text>
+  <text x="52" y="264" fill="#858585" font-family="Inter, sans-serif" font-size="17" font-weight="400">and software that holds together in production.</text>
 
-  <!-- Available badge (matches .hero-avail) -->
+  <!-- Available badge -->
   <circle cx="56" cy="296" r="3" fill="#22c55e"/>
-  <text x="66" y="299" fill="#3e3e3e"
-        font-family="'JetBrains Mono', 'Courier New', monospace" font-size="10"
-        letter-spacing="0.08em">AVAILABLE FOR ENGAGEMENTS</text>
+  <text x="66" y="299" fill="#3e3e3e" font-family="JetBrains Mono, Courier New, monospace" font-size="10" letter-spacing="0.8">AVAILABLE FOR ENGAGEMENTS</text>
 
-  <!-- Right side: tech tags in mono (matches website stack tags) -->
-  <text x="820" y="108" fill="#3e3e3e"
-        font-family="'JetBrains Mono', 'Courier New', monospace" font-size="12"
-        letter-spacing="0.06em">python  fastapi  rag  agents</text>
-  <text x="820" y="130" fill="#3e3e3e"
-        font-family="'JetBrains Mono', 'Courier New', monospace" font-size="12"
-        letter-spacing="0.06em">evals  mcp  embeddings  telemetry</text>
-  <text x="820" y="152" fill="#3e3e3e"
-        font-family="'JetBrains Mono', 'Courier New', monospace" font-size="12"
-        letter-spacing="0.06em">next.js  tauri  postgres  docker</text>
+  <!-- Right side: tech tags -->
+  <text x="820" y="108" fill="#3e3e3e" font-family="JetBrains Mono, Courier New, monospace" font-size="12" letter-spacing="0.7">python  fastapi  rag  agents</text>
+  <text x="820" y="130" fill="#3e3e3e" font-family="JetBrains Mono, Courier New, monospace" font-size="12" letter-spacing="0.7">evals  mcp  embeddings  telemetry</text>
+  <text x="820" y="152" fill="#3e3e3e" font-family="JetBrains Mono, Courier New, monospace" font-size="12" letter-spacing="0.7">next.js  tauri  postgres  docker</text>
 
-  <!-- Thin border matching website card borders -->
-  <rect x="0.5" y="0.5" width="1199" height="319" rx="16" fill="none"
-        stroke="#E84637" stroke-opacity="0.08" stroke-width="1"/>
+  <!-- Border -->
+  <rect x="0.5" y="0.5" width="1199" height="319" rx="16" fill="none" stroke="#E84637" stroke-opacity="0.08" stroke-width="1"/>
 </svg>
