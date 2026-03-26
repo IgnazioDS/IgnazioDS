@@ -33,11 +33,17 @@ Based in Guangzhou, CN. Available for contract and product engineering work.
 
 | Project | What it does | Stack |
 |---|---|---|
+| [ai-portfolio-lab](https://github.com/IgnazioDS/ai-portfolio-lab) | Public roadmap and Python CLI for the next wave of AI, agent, automation, business, and data-tool builds | Python · CLI · Portfolio strategy |
 | [NexusRAG](https://github.com/IgnazioDS/NexusRAG) | Stateful RAG system with memory persistence and multi-provider orchestration | LangGraph · pgvector · Vertex AI · FastAPI |
 | [Long-Form-Content-Intelligence-Engine](https://github.com/IgnazioDS/Long-Form-Content-Intelligence-Engine) | Citation-aware knowledge ingestion and question answering with verification | Python · Retrieval · Evaluation |
 | [Freelance-Agent](https://github.com/IgnazioDS/Freelance-Agent) | Internal agent system for lead scouting, proposal generation, and delivery tracking | FastAPI · SQLite · React |
 | [SentinelID](https://github.com/IgnazioDS/SentinelID) | Security-focused biometric authentication with on-device vision and admin UI | Tauri · FastAPI · Next.js |
 | [One-Link Growth OS](https://github.com/IgnazioDS/One-Link-Growth-OS) | Multi-tenant SaaS with analytics, payments, and growth workflows | Python · PostgreSQL · Stripe |
+
+### Building Now
+
+- [ai-portfolio-lab](https://github.com/IgnazioDS/ai-portfolio-lab): a public build hub for AI/ML, agents, LLM apps, Python automations, developer tools, business tools, and data tools
+- Current first-wave targets: Repo RAG Debugger, Agent Runbook Orchestrator, Revenue Signal Copilot
 
 ---
 
