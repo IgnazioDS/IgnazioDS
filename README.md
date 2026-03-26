@@ -33,17 +33,16 @@ Based in Guangzhou, CN. Available for contract and product engineering work.
 
 | Project | What it does | Stack |
 |---|---|---|
-| [ai-portfolio-lab](https://github.com/IgnazioDS/ai-portfolio-lab) | Public roadmap and Python CLI for the next wave of AI, agent, automation, business, and data-tool builds | Python · CLI · Portfolio strategy |
+| [repo-rag-debugger](https://github.com/IgnazioDS/repo-rag-debugger) | Source-aware debugging assistant for codebases, docs, and stack traces | Python · RAG · FastAPI |
+| [agent-runbook-orchestrator](https://github.com/IgnazioDS/agent-runbook-orchestrator) | Durable execution engine for AI-assisted operational runbooks with approvals and auditability | Python · Agents · Automation |
+| [revenue-signal-copilot](https://github.com/IgnazioDS/revenue-signal-copilot) | Lead intelligence system for account scoring, prioritization, and outreach support | Python · AI/ML · PostgreSQL |
+| [evalops-workbench](https://github.com/IgnazioDS/evalops-workbench) | Local-first evaluation harness for prompts, tools, and agent regressions | Python · Evals · OpenTelemetry |
+| [data-quality-watchtower](https://github.com/IgnazioDS/data-quality-watchtower) | Data-quality guardrail system for schema drift, anomaly detection, and incident summaries | Python · Data Tooling · ML Ops |
 | [NexusRAG](https://github.com/IgnazioDS/NexusRAG) | Stateful RAG system with memory persistence and multi-provider orchestration | LangGraph · pgvector · Vertex AI · FastAPI |
 | [Long-Form-Content-Intelligence-Engine](https://github.com/IgnazioDS/Long-Form-Content-Intelligence-Engine) | Citation-aware knowledge ingestion and question answering with verification | Python · Retrieval · Evaluation |
 | [Freelance-Agent](https://github.com/IgnazioDS/Freelance-Agent) | Internal agent system for lead scouting, proposal generation, and delivery tracking | FastAPI · SQLite · React |
 | [SentinelID](https://github.com/IgnazioDS/SentinelID) | Security-focused biometric authentication with on-device vision and admin UI | Tauri · FastAPI · Next.js |
 | [One-Link Growth OS](https://github.com/IgnazioDS/One-Link-Growth-OS) | Multi-tenant SaaS with analytics, payments, and growth workflows | Python · PostgreSQL · Stripe |
-
-### Building Now
-
-- [ai-portfolio-lab](https://github.com/IgnazioDS/ai-portfolio-lab): a public build hub for AI/ML, agents, LLM apps, Python automations, developer tools, business tools, and data tools
-- Current first-wave targets: Repo RAG Debugger, Agent Runbook Orchestrator, Revenue Signal Copilot
 
 ---
 
