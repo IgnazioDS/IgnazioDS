@@ -1,5 +1,5 @@
 # Ignazio De Santis
-![Banner](./assets/profile-banner.svg)
+
 
 If your AI system works in demos but breaks under real usage, you’re not alone. Most RAG pipelines and agent workflows fail because they’re not designed for retrieval quality, state, and failure handling.
 I build reliable AI systems: retrieval, agent orchestration, evaluation, and production automation.
