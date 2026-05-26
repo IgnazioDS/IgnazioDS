@@ -90,6 +90,7 @@ GitHub-derived signals about the codebase instead, until promoted.
 {
   "system":            "nexusrag",
   "mode":              "live",
+  "workload":          "production",
   "status":            "operational",
   "uptime_pct_30d":    99.94,
   "last_deployed_at":  "<ISO-8601>",
@@ -100,15 +101,26 @@ GitHub-derived signals about the codebase instead, until promoted.
 }
 ```
 
-`uptime_pct_30d` is a float `0.0`–`100.0`, rolled up over the trailing 30
-days, rounded to two decimal places. Source: per-system self-pinger every
-5 minutes, or Vercel deployment-status approximation if pinging is too
-invasive. The chosen method MUST be documented in the system's README.
+`workload` (Tier A only) declares the *nature* of the live workload, so the
+homepage can render systems side by side without conflating them:
 
-`last_active_at` is the ISO-8601 timestamp of the most recent successful
-piece of real work (last query served, last runbook step completed, last
-eval run, etc.). Distinct from `generated_at` (when the response itself
-was assembled).
+- `"production"` — real user / customer traffic (e.g. NexusRAG).
+- `"benchmark"` — a synthetic, reproducible, scheduled evaluation the system
+  runs against itself (a public benchmark, drift scan, or scoring run). Still a
+  real recurring workload persisted across cold starts, but not user traffic.
+
+Both are `mode: "live"`. If `workload` is absent the widget treats it as
+`production`. A benchmark-workload system MUST disclose the synthetic nature of
+its fixture on its own surfaces (its `/work` page, README, and artifact endpoint).
+
+`uptime_pct_30d` (optional) is a float `0.0`–`100.0` over the trailing 30 days.
+Source: a per-system self-pinger or a Vercel deployment-status approximation,
+documented in the system's README. **Omit the field entirely when there is no
+honest source** rather than deriving a number that is not genuinely uptime.
+
+`last_active_at` is the ISO-8601 timestamp of the most recent successful piece
+of real work (last query served, last runbook step completed, last benchmark
+run, etc.). Distinct from `generated_at` (when the response itself was assembled).
 
 #### Per-system Tier-A metrics
 
@@ -237,6 +249,47 @@ GitHub's 60-req/hr unauthenticated rate limit.
 `lines_of_code` is sourced from a build-time JSON artifact written by
 `scripts/compute_telemetry_static.py` and committed at deploy time. If
 LOC cannot be sourced cleanly, **omit the field** rather than estimate.
+
+## Benchmark artifact endpoints (optional, Tier A)
+
+A system whose live workload is a public benchmark exposes a second
+unauthenticated GET endpoint that publishes the latest run. It is additive (it
+does not change `/api/stats`), so `schema_version` stays `1`.
+
+| System kind | Endpoint | `benchmark_type` |
+|---|---|---|
+| eval harness (evalops) | `/api/benchmark-latest` | `eval` |
+| drift monitor (data-quality-watchtower) | `/api/incident-latest` | `drift` |
+| lead scoring (revenue-signal-copilot) | `/api/scoring-latest` | `scoring` |
+
+Common envelope (system-specific keys live under `metrics` / `variants` /
+`regressions`):
+
+```json
+{
+  "system":         "<slug>",
+  "benchmark_type": "eval" | "drift" | "scoring",
+  "status":         "pending",        // only before the first run; omit once published
+  "run_id":         "<id>" | null,
+  "fixture":        "<fixture-id>",
+  "metrics":        { ... } | null,
+  "artifact_urls":  { "report": "<url>", "fixture": "<url>", "run": "<url>" },
+  "schema_version": 1,
+  "generated_at":   "<ISO-8601>",
+  "previous_run":   { "run_id": "...", "generated_at": "...", "delta": { ... } } | null
+}
+```
+
+Rules:
+
+- Same headers as `/api/stats` (CORS `*`, `Cache-Control: public, max-age=30,
+  stale-while-revalidate=60`). Never returns HTTP 5xx; before the first run it
+  emits `status: "pending"` with `metrics: null`.
+- The artifact and its fixture MUST be public and reproducible (committed in the
+  repo or linked via `artifact_urls`) so any third party can re-run them.
+- Values are computed from real runs only, never seeded. Such a system reports
+  `workload: "benchmark"` on `/api/stats` and discloses the synthetic fixture on
+  its `/work` page and README.
 
 ## Persistence
 
