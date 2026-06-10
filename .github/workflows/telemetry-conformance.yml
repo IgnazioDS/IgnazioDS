@@ -1,0 +1,55 @@
+name: telemetry-conformance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'fleet.json'
+      - 'scripts/**'
+      - 'TELEMETRY_SCHEMA.md'
+      - '.github/workflows/telemetry-conformance.yml'
+  pull_request:
+    paths:
+      - 'fleet.json'
+      - 'scripts/**'
+      - 'TELEMETRY_SCHEMA.md'
+  schedule:
+    # Daily live audit of the fleet against the contract, 07:00 UTC.
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validator-tests:
+    # Deterministic, offline. Gates every push and PR.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run validator unit tests
+        run: python3 -m unittest discover -s scripts -p 'test_*.py' -v
+      - name: Lint fleet.json is valid JSON
+        run: python3 -c "import json; json.load(open('fleet.json')); print('fleet.json OK')"
+
+  fleet-conformance:
+    # Hits the live endpoints. Runs on schedule, manual dispatch, and pushes to
+    # main. A red run here means a deployed system has drifted from the contract.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify live fleet telemetry conformance
+        run: python3 scripts/verify_telemetry.py --json | tee conformance-report.json
+      - name: Upload conformance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-report
+          path: conformance-report.json

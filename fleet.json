@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "contract": "https://github.com/IgnazioDS/IgnazioDS/blob/main/TELEMETRY_SCHEMA.md",
+  "description": "Machine-readable registry of the eleventh.dev fleet. The system 'slug' is the value emitted in the /api/stats 'system' field and is the identity used by the homepage widget; it is intentionally NOT always equal to the Vercel deploy URL or GitHub repo name (e.g. slug 'evalops' deploys at 'evalops-workbench.vercel.app'). scripts/verify_telemetry.py validates every entry against TELEMETRY_SCHEMA.md.",
+  "systems": [
+    {
+      "slug": "nexusrag",
+      "repo": "NexusRAG",
+      "url": "https://nexusrag-lyart.vercel.app",
+      "tier": "A",
+      "expected_mode": "live",
+      "expected_workload": "production",
+      "required_metrics": ["queries_total", "queries_24h", "p50_latency_ms"]
+    },
+    {
+      "slug": "runbook-orchestrator",
+      "repo": "agent-runbook-orchestrator",
+      "url": "https://agent-runbook-orchestrator.vercel.app",
+      "tier": "B",
+      "expected_mode": "showcase",
+      "required_metrics": ["commits_30d", "commits_total", "primary_language", "repo_stars", "lines_of_code"]
+    },
+    {
+      "slug": "evalops",
+      "repo": "evalops-workbench",
+      "url": "https://evalops-workbench.vercel.app",
+      "tier": "A",
+      "expected_mode": "live",
+      "expected_workload": "benchmark",
+      "required_metrics": ["eval_runs_total", "eval_runs_24h", "last_pass_rate", "rolling_pass_rate_7d", "regressions_caught_30d", "experiments_tracked"],
+      "artifact_path": "/api/benchmark-latest",
+      "benchmark_type": "eval"
+    },
+    {
+      "slug": "repo-rag-debugger",
+      "repo": "repo-rag-debugger",
+      "url": "https://repo-rag-debugger.vercel.app",
+      "tier": "B",
+      "expected_mode": "showcase",
+      "required_metrics": ["commits_30d", "commits_total", "primary_language", "repo_stars", "lines_of_code"]
+    },
+    {
+      "slug": "revenue-signal-copilot",
+      "repo": "revenue-signal-copilot",
+      "url": "https://revenue-signal-copilot.vercel.app",
+      "tier": "A",
+      "expected_mode": "live",
+      "expected_workload": "benchmark",
+      "required_metrics": ["accounts_total", "accounts_scored_24h", "signals_detected_24h", "high_priority_accounts"],
+      "artifact_path": "/api/scoring-latest",
+      "benchmark_type": "scoring"
+    },
+    {
+      "slug": "data-quality-watchtower",
+      "repo": "data-quality-watchtower",
+      "url": "https://data-quality-watchtower.vercel.app",
+      "tier": "A",
+      "expected_mode": "live",
+      "expected_workload": "benchmark",
+      "required_metrics": ["datasets_monitored", "checks_run_24h", "anomalies_detected_24h", "schema_drifts_30d", "last_check_at"],
+      "artifact_path": "/api/incident-latest",
+      "benchmark_type": "drift"
+    }
+  ]
+}

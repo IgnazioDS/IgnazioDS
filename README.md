@@ -7,7 +7,7 @@
 Backend systems, retrieval, agents, evaluation. I build reliable AI systems for teams that have outgrown the prototype phase: RAG with measurable retrieval quality, agent workflows with state and approval gates, FastAPI backends purpose-built for LLM products, and the evaluation layer most teams skip between prototype and production.
 
 **Available for contract work.**
-[ignaziodesantis.com](https://ignaziodesantis.com/) · [eleventh.dev](https://eleventh.dev/) · [LinkedIn](https://www.linkedin.com/in/ignaziodesantis) · [Email](mailto:ignazio.desantis.dev@gmail.com)
+[ignaziodesantis.com](https://ignaziodesantis.com/) · [eleventh.dev](https://eleventh.dev/) · [LinkedIn](https://www.linkedin.com/in/ignaziodesantis) · [Email](mailto:ignaziodesantisofficial@gmail.com)
 
 **Stack:** Python · FastAPI · LangGraph · pgvector · Anthropic Claude · React · TypeScript · Next.js · Tauri · Rust
 

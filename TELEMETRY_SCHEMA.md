@@ -37,6 +37,11 @@ Wildcard origin is intentional: the response contains aggregate, non-PII
 metrics only. CORS preflight (`OPTIONS /api/stats`) returns HTTP 204 with
 the same CORS headers.
 
+> **Notation.** The JSON blocks below are pseudo-JSON templates, not literal
+> responses: `<type>` placeholders denote the expected data type, `|` denotes
+> a union/enum of allowed values, and `//` introduces a documentation comment.
+> Actual responses MUST be strict, valid JSON with none of these markers.
+
 ## Response envelope
 
 All responses share this top-level shape, regardless of tier:
@@ -52,6 +57,13 @@ All responses share this top-level shape, regardless of tier:
   "generated_at":      "<ISO-8601>"
 }
 ```
+
+`system` is the canonical **slug** — the stable identity the homepage widget
+keys on. It is **not necessarily the Vercel deploy URL or GitHub repo name**:
+e.g. the system `evalops` deploys at `evalops-workbench.vercel.app` from the
+`evalops-workbench` repo. The authoritative slug → URL → repo → required-metrics
+mapping lives in machine-readable form at [`fleet.json`](./fleet.json) and is
+enforced by [`scripts/verify_telemetry.py`](./scripts/verify_telemetry.py).
 
 `mode` is the explicit signal to the homepage widget about which Tier
 contract to render. If absent, the widget treats the system as `live`.
@@ -359,8 +371,25 @@ module-scope cache effectively bounds upstream call volume.
 
 ## Verification across the fleet
 
-After all six repos are instrumented and merged, this curl loop checks
-the entire fleet:
+The fleet is verified by a committed, stdlib-only validator that reads the
+registry in [`fleet.json`](./fleet.json) and checks every system's live
+`/api/stats` (and benchmark-artifact) endpoint against this contract:
+
+```bash
+python3 scripts/verify_telemetry.py            # validate the whole fleet
+python3 scripts/verify_telemetry.py --only evalops
+python3 scripts/verify_telemetry.py --json     # machine-readable report
+```
+
+It validates the response envelope, the `mode`/`workload` tier rules, the
+per-system required `metrics` keys, the `generated_at` timestamp, and the
+required CORS/cache headers. It exits non-zero on any hard violation, so it
+doubles as a CI gate — see
+[`.github/workflows/telemetry-conformance.yml`](./.github/workflows/telemetry-conformance.yml),
+which runs the offline validator unit tests on every push/PR and the live
+fleet conformance check on a daily schedule.
+
+A quick manual fallback (no Python) is the equivalent curl loop:
 
 ```bash
 for url in \
