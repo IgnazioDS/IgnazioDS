@@ -1,0 +1,48 @@
+name: space-invaders
+
+on:
+  schedule:
+    # New game every day, 05:17 UTC (seeded by the date).
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/generate_invaders.py'
+      - 'scripts/invaders/**'
+      - '.github/workflows/space-invaders.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: space-invaders
+  cancel-in-progress: true
+
+jobs:
+  redeploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Unit tests
+        run: python3 -m unittest discover -s scripts -p 'test_invaders*.py' -v
+      - name: Generate today's game
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 scripts/generate_invaders.py \
+            --user "${{ github.repository_owner }}" \
+            --output /tmp/space-invaders.svg
+      - name: Publish to output branch
+        # Single-commit orphan branch: daily redeploys never pollute main history.
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch --orphan output
+          cp /tmp/space-invaders.svg space-invaders.svg
+          git add space-invaders.svg
+          git commit -m "redeploy: wave $(date -u +%j) ($(date -u +%F))"
+          git push --force origin output
