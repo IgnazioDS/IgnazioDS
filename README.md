@@ -6,7 +6,7 @@
   <sub>self-playing. each invader = one of my last 55 days of commits. score = real contributions. new game every day.</sub>
 </p>
 
-# ignazio de santis
+# Ignazio De Santis
 
 backend · retrieval · agents · evals
 
