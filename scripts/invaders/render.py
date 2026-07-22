@@ -315,11 +315,18 @@ def _bottom_hud(script):
     credit = _text(
         sim.WIDTH - 10 - sprites.text_width("CREDIT 00", FONT_PX), 199, "CREDIT 00", LABEL
     )
+    site = "ELEVENTH.DEV"
+    site_x = sim.WIDTH / 2 - sprites.text_width(site, FONT_PX) / 2
+    footer = (
+        f'<a href="https://eleventh.dev">'
+        f"{_text(site_x, 199, site, GREENS[3])}"
+        f"</a>"
+    )
     return (
         f'<rect x="6" y="{sim.GROUND_Y}" width="{sim.WIDTH - 12}" height="1" fill="{GROUND}"/>'
         f'<g fill="{CANNON_COLOR}" transform="translate(10 199.5) scale(0.7)">'
         f'<use href="#cannon"/></g>'
-        f"{lives_extra}{credit}"
+        f"{lives_extra}{footer}{credit}"
     )
 
 
@@ -369,6 +376,11 @@ def render(script, day_counts, hi_score, wave_label):
         f'viewBox="0 0 {VIEW_W} {VIEW_H}" width="{VIEW_W}" height="{VIEW_H}" '
         f'role="img" aria-label="Self-playing Space Invaders over real GitHub '
         f'contribution data">'
+        f"<!-- self-playing space invaders · built by Ignazio De Santis · "
+        f"github.com/IgnazioDS · eleventh.dev -->"
+        f"<desc>Built by Ignazio De Santis (github.com/IgnazioDS, eleventh.dev). "
+        f"Each invader is one day of real GitHub contribution activity; "
+        f"regenerated daily.</desc>"
         f"{_style()}{_defs()}"
         f'<g transform="scale({SCALE})">{"".join(layers)}</g>'
         "</svg>"
