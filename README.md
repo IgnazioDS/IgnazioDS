@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <sub>self-playing. each invader = one of my last 55 days of commits. score = real contributions. new game every day.</sub>
+  <sub>self-playing. each invader = one of my last 55 days of contributions. score = the real count. new game every day.</sub>
 </p>
 
 # Ignazio De Santis

@@ -21,7 +21,7 @@ CANNON_Y, BULLET_START_Y, GROUND_Y = 180, 178, 196
 BULLET_SPEED, CANNON_SPEED = 260, 105
 AIM_SETTLE, FIRE_COOLDOWN = 0.12, 0.1
 BOMB_SPEED = 55
-UFO_Y, UFO_SPEED, UFO_TRIGGER_ALIVE, UFO_POINTS = 22, 45, 30, 150
+UFO_Y, UFO_SPEED, UFO_TRIGGER_ALIVE = 22, 45, 30
 DEATH_TRIGGER_ALIVE = 18
 INTRO_DELAY, OUTRO_DELAY = 0.8, 2.6
 
@@ -223,8 +223,8 @@ class _Sim:
         t_hit = t_enter + (hit_x + 16 - 8) / UFO_SPEED
         flight = (BULLET_START_Y - (UFO_Y + 4)) / BULLET_SPEED
         self.shots.append(Shot(hit_x, t_hit - flight, t_hit, UFO_Y + 4))
-        self.score += UFO_POINTS
-        self.score_states.append((t_hit, self.score))
+        # Purely cosmetic kill: SCORE stays strictly equal to real
+        # contribution counts, so the README's claim holds exactly.
         self.ufo = {"t_enter": t_enter, "t_die": t_hit, "x_die": hit_x}
         self._advance_march(t_hit)
         self.t = t_hit + 0.6

@@ -252,7 +252,7 @@ def _ufo(script):
     bonus = (
         f'<g opacity="0" fill="{UFO_COLOR}" '
         f'transform="translate({_f(x_die - 8)} {sim.UFO_Y + 12})">'
-        f"{sprites.text_rects(f'+{sim.UFO_POINTS}', 1.5)}"
+        f"{sprites.text_rects('BONUS', 1.5)}"
         f"{_opacity_window(t_die + 0.3, t_die + 1.5, script.duration)}</g>"
     )
     return saucer + boom + bonus

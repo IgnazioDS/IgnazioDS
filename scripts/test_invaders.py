@@ -33,9 +33,8 @@ class SimulationInvariants(unittest.TestCase):
         self.assertEqual(len(times), len(set(times)))
         self.assertLess(times[-1], self.script.duration)
 
-    def test_score_totals_contributions_plus_ufo(self):
-        expected = sum(DAY_COUNTS) + sim.UFO_POINTS
-        self.assertEqual(self.script.score_states[-1][1], expected)
+    def test_score_equals_real_contributions_exactly(self):
+        self.assertEqual(self.script.score_states[-1][1], sum(DAY_COUNTS))
 
     def test_march_stays_inside_bounds(self):
         for _, ox, oy in self.script.march:
