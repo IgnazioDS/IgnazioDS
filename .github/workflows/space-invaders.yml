@@ -31,7 +31,10 @@ jobs:
         run: python3 -m unittest discover -s scripts -p 'test_invaders*.py' -v
       - name: Generate today's game
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Default token sees the public calendar (which already includes
+          # everything for this account). Optional CONTRIB_TOKEN (classic PAT,
+          # read:user) takes over if private activity ever stops being counted.
+          GITHUB_TOKEN: ${{ secrets.CONTRIB_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           python3 scripts/generate_invaders.py \
             --user "${{ github.repository_owner }}" \

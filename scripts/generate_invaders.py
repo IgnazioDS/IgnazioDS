@@ -17,6 +17,7 @@ import datetime
 import json
 import os
 import sys
+import urllib.error
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -50,8 +51,40 @@ def fetch_calendar(user, token):
             "User-Agent": "space-invaders-readme",
         },
     )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.loads(response.read())
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            body = json.loads(response.read())
+    except urllib.error.HTTPError as exc:
+        hint = (
+            " (bad or expired token?)" if exc.code in (401, 403)
+            else " (GitHub API trouble; retry later)" if exc.code >= 500
+            else ""
+        )
+        raise SystemExit(f"GitHub GraphQL: HTTP {exc.code} {exc.reason}{hint}") from exc
+    except urllib.error.URLError as exc:
+        raise SystemExit(f"cannot reach GitHub GraphQL API: {exc.reason}") from exc
+    except TimeoutError as exc:
+        raise SystemExit("GitHub GraphQL request timed out after 30s") from exc
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"GitHub returned a non-JSON response: {exc}") from exc
+    return validate_graphql_body(body, user)
+
+
+def validate_graphql_body(body, user):
+    """Surface GraphQL-level errors before shape extraction sees null data."""
+    if not isinstance(body, dict):
+        raise SystemExit(f"unexpected GraphQL response type: {type(body).__name__}")
+    if body.get("errors"):
+        messages = "; ".join(
+            e.get("message", str(e)) if isinstance(e, dict) else str(e)
+            for e in body["errors"]
+        )
+        raise SystemExit(f"GraphQL errors: {messages}")
+    if not isinstance(body.get("data"), dict):
+        raise SystemExit("GraphQL response has no data object")
+    if body["data"].get("user") is None:
+        raise SystemExit(f"GitHub user {user!r} not found (or token cannot see it)")
+    return body
 
 
 def extract_days(api_response):
@@ -91,8 +124,13 @@ def main():
     args = parser.parse_args()
 
     if args.input:
-        with open(args.input) as handle:
-            api_response = json.load(handle)
+        try:
+            with open(args.input) as handle:
+                api_response = validate_graphql_body(json.load(handle), args.user)
+        except OSError as exc:
+            raise SystemExit(f"cannot read {args.input}: {exc}") from exc
+        except json.JSONDecodeError as exc:
+            raise SystemExit(f"{args.input} is not valid JSON: {exc}") from exc
     else:
         token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
         if not token:
@@ -107,10 +145,13 @@ def main():
     )
     svg = build_svg(days, total, today)
 
-    os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
-    with open(args.output, "w") as handle:
-        handle.write(svg)
-    size_kb = os.path.getsize(args.output) / 1024
+    try:
+        os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
+        with open(args.output, "w") as handle:
+            handle.write(svg)
+        size_kb = os.path.getsize(args.output) / 1024
+    except OSError as exc:
+        raise SystemExit(f"cannot write {args.output}: {exc}") from exc
     print(f"wrote {args.output} ({size_kb:.0f} KiB, hi-score {total})")
 
 

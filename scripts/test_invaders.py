@@ -8,6 +8,7 @@ import re
 import unittest
 import xml.dom.minidom
 
+import generate_invaders
 from invaders import render, sim, sprites
 
 DAY_COUNTS = [(i * 7) % 23 for i in range(55)]  # mixed zero/non-zero pattern
@@ -99,6 +100,40 @@ class RenderOutput(unittest.TestCase):
     def test_hud_contains_hi_score_and_wave(self):
         self.assertIn('aria-label', self.svg)
         self.assertIn("indefinite", self.svg)
+
+
+class GraphqlBodyValidation(unittest.TestCase):
+    VALID = {
+        "data": {
+            "user": {
+                "contributionsCollection": {
+                    "contributionCalendar": {"totalContributions": 1, "weeks": []}
+                }
+            }
+        }
+    }
+
+    def test_valid_body_passes_through(self):
+        self.assertIs(
+            generate_invaders.validate_graphql_body(self.VALID, "someone"), self.VALID
+        )
+
+    def test_graphql_errors_are_surfaced(self):
+        body = {"errors": [{"message": "Bad credentials"}], "data": None}
+        with self.assertRaisesRegex(SystemExit, "Bad credentials"):
+            generate_invaders.validate_graphql_body(body, "someone")
+
+    def test_null_data_rejected(self):
+        with self.assertRaisesRegex(SystemExit, "no data object"):
+            generate_invaders.validate_graphql_body({"data": None}, "someone")
+
+    def test_unknown_user_rejected(self):
+        with self.assertRaisesRegex(SystemExit, "not found"):
+            generate_invaders.validate_graphql_body({"data": {"user": None}}, "ghost")
+
+    def test_non_dict_body_rejected(self):
+        with self.assertRaisesRegex(SystemExit, "unexpected"):
+            generate_invaders.validate_graphql_body(["nope"], "someone")
 
 
 class SpriteHelpers(unittest.TestCase):
