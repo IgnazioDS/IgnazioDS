@@ -100,6 +100,11 @@ class RenderOutput(unittest.TestCase):
         self.assertIn('aria-label', self.svg)
         self.assertIn("indefinite", self.svg)
 
+    def test_attribution_survives_in_artifact(self):
+        self.assertIn("built by Ignazio De Santis", self.svg)
+        self.assertIn('<a href="https://eleventh.dev">', self.svg)
+        self.assertIn("<desc>", self.svg)
+
 
 class GraphqlBodyValidation(unittest.TestCase):
     VALID = {
