@@ -1,22 +1,22 @@
-name: space-invaders
+name: eleventh-knight
 
 on:
   schedule:
-    # New game every day, 05:17 UTC (seeded by the date).
+    # A new quest every day, 05:17 UTC (seeded by the date).
     - cron: '17 5 * * *'
   workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - 'scripts/generate_invaders.py'
-      - 'scripts/invaders/**'
-      - '.github/workflows/space-invaders.yml'
+      - 'scripts/generate_quest.py'
+      - 'scripts/quest/**'
+      - '.github/workflows/quest.yml'
 
 permissions:
   contents: write
 
 concurrency:
-  group: space-invaders
+  group: eleventh-knight
   cancel-in-progress: true
 
 jobs:
@@ -28,24 +28,24 @@ jobs:
         with:
           python-version: '3.12'
       - name: Unit tests
-        run: python3 -m unittest discover -s scripts -p 'test_invaders*.py' -v
-      - name: Generate today's game
+        run: python3 -m unittest discover -s scripts -p 'test_quest*.py' -v
+      - name: Generate today's quest
         env:
-          # Default token sees the public calendar (which already includes
+          # The default token sees the public calendar (which already includes
           # everything for this account). Optional CONTRIB_TOKEN (classic PAT,
           # read:user) takes over if private activity ever stops being counted.
           GITHUB_TOKEN: ${{ secrets.CONTRIB_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
-          python3 scripts/generate_invaders.py \
+          python3 scripts/generate_quest.py \
             --user "${{ github.repository_owner }}" \
-            --output /tmp/space-invaders.svg
+            --output /tmp/quest.svg
       - name: Publish to output branch
         # Single-commit orphan branch: daily redeploys never pollute main history.
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git switch --orphan output
-          cp /tmp/space-invaders.svg space-invaders.svg
-          git add space-invaders.svg
-          git commit -m "redeploy: wave $(date -u +%j) ($(date -u +%F))"
+          cp /tmp/quest.svg quest.svg
+          git add quest.svg
+          git commit -m "redeploy: quest $(date -u +%F)"
           git push --force origin output

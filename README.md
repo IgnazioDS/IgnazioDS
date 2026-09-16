@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/IgnazioDS/IgnazioDS/output/space-invaders.svg" width="830" alt="self-playing space invaders over my real github contribution data">
+  <img src="https://raw.githubusercontent.com/IgnazioDS/IgnazioDS/output/quest.svg" width="830" alt="the eleventh knight: a self-playing dark fantasy quest over my real github contribution data">
 </p>
 
 <p align="center">
-  <sub>self-playing. each invader = one of my last 55 days of contributions. score = the real count. new game every day.</sub>
+  <sub>self-playing. each monster = one of my last 24 active days, tougher monster = busier day. the dragon = my biggest day. souls = the real contribution count. new quest every day.</sub>
 </p>
 
 # Ignazio De Santis
