@@ -4,6 +4,7 @@ referenced with <use>, so a sprite sheet shown fifty times is stored once.
 
 from dataclasses import dataclass
 
+from .. import layout
 from ..art import png, sprite
 
 
@@ -46,3 +47,9 @@ class AssetBook:
         )
         return f"<defs>{images}</defs>"
 
+
+def centered_use(asset, y):
+    """<use> of an asset horizontally centred on the playfield at row y."""
+    x = layout.WIDTH / 2 - asset.width / 2
+    text = f"{x:.2f}".rstrip("0").rstrip(".")
+    return f'<use href="#{asset.id}" x="{text}" y="{y}"/>'

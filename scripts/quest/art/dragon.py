@@ -36,6 +36,7 @@ class WyrmPose:
     jaw: float = 4.0         # jaw opening in degrees
     tail: float = 0.0        # tail wave phase (radians)
     slump: float = 0.0       # 0 alive, 1 collapsed
+    far_wing: float = None   # far wing beat when it leads the near one (None: in step)
 
 
 def _rot(points, origin, degrees):
@@ -98,7 +99,8 @@ def build_parts(pose):
     ctrl1 = (76, 40 + b + 12 * pose.neck)
     ctrl2 = (52, 30 + b + 20 * pose.neck)
 
-    parts = _wing((116, 66 + b), (140, 96 + b), pose.wing, far=True)
+    far_beat = pose.wing if pose.far_wing is None else pose.far_wing
+    parts = _wing((116, 66 + b), (140, 96 + b), far_beat, far=True)
     parts += _tail((146, 110 + b), pose.tail, pose.slump)
     parts += [Part(Ellipse((138, 118 + b), 7, 11, 0.4), SCALES, shade=-0.12),
               Part(Capsule((138, 124 + b), (132, 140 + b), 4.0, 2.8), SCALES, shade=-0.12),
@@ -165,19 +167,11 @@ def _head(base, pose):
     return parts, details
 
 
-def _shift_shape(shape, dx, dy):
-    if isinstance(shape, Capsule):
-        return Capsule((shape.a[0] + dx, shape.a[1] + dy), (shape.b[0] + dx, shape.b[1] + dy), shape.r0, shape.r1)
-    if isinstance(shape, Ellipse):
-        return Ellipse((shape.c[0] + dx, shape.c[1] + dy), shape.rx, shape.ry, shape.angle)
-    return Poly(tuple((x + dx, y + dy) for x, y in shape.points), shape.bevel)
-
-
-def _render(pose, flash=False):
+def _render(pose, flash=False, bank=0.0):
     parts, details = build_parts(pose)
-    dx, dy = SHIFT
-    parts = [dataclasses.replace(p, shape=_shift_shape(p.shape, dx, dy)) for p in parts]
-    details = [(x + dx, y + dy, c) for x, y, c in details]
+    if bank:
+        parts, details = rig.transform(parts, details, rotate=bank, pivot=(112, 92))
+    parts, details = rig.transform(parts, details, offset=SHIFT)
     if flash:
         parts = [dataclasses.replace(p, material=FLASH, shade=0.0) for p in parts]
         details = []
@@ -195,18 +189,46 @@ ROAR = WyrmPose(bob=0, wing=-1.0, neck=-0.8, head=-30, jaw=36, tail=0.5)
 HURT = WyrmPose(bob=5, wing=0.3, neck=-0.5, head=-26, jaw=22, tail=2.5)
 DEATH = (WyrmPose(bob=6, wing=0.8, neck=0.4, head=24, jaw=18, tail=1.0, slump=0.4),
          WyrmPose(bob=8, wing=1.0, neck=0.9, head=38, jaw=10, tail=0.5, slump=1.0))
+# swooping low across the field: wings swept back, neck thrust out, body banked nose-down
+DIVE = (WyrmPose(bob=0, wing=0.95, far_wing=0.6, neck=0.2, head=16, jaw=28, tail=2.0),
+        WyrmPose(bob=0, wing=0.7, far_wing=0.9, neck=0.3, head=18, jaw=32, tail=3.4))
+DIVE_BANK = -22.0
 
 FRAME_NAMES = ("hover0", "hover1", "hover2", "hover3", "breath0", "breath1", "breath2",
-               "roar", "hurt", "death0", "death1")
+               "roar", "hurt", "death0", "death1", "dive0", "dive1")
 
 
 @lru_cache(maxsize=1)
 def frames():
-    poses = (*HOVER, *BREATH, ROAR, HURT, *DEATH)
+    poses = (*HOVER, *BREATH, ROAR, HURT, *DEATH, *DIVE)
     named = {}
     for name, pose in zip(FRAME_NAMES, poses):
-        named[name] = _render(pose, flash=(name == "hurt"))
+        named[name] = _render(pose, flash=(name == "hurt"), bank=DIVE_BANK if name.startswith("dive") else 0.0)
     return named
+
+
+# The prologue's distant wyrm: a small, near-black silhouette rim-lit by the
+# blood moon, body levelled into flight, gliding left on slow wing beats.
+SILHOUETTE = Material(ramp("#07030a", "#0e0612", "#170a1b"), rim=raster.rgb("#8c2c46"), rim_cut=0.4, ambient=0.3)
+FLYBY_SCALE, FLYBY_BANK = 0.42, -26.0
+FLYBY_W, FLYBY_H = 104, 74
+FLYBY_OFFSET = (8.0, 14.0)
+FLYBY = tuple(WyrmPose(bob=0, wing=wing, far_wing=far, neck=-0.15, head=14, jaw=6, tail=tail)
+              for wing, far, tail in ((-1.0, -0.7, 0.0), (-0.2, -0.9, 1.6), (0.95, 0.3, 3.1), (0.25, 0.95, 4.7)))
+
+
+@lru_cache(maxsize=1)
+def flyby_frames():
+    """Wing-beat cycle of the distant silhouette (FLYBY_W x FLYBY_H frames)."""
+    out = []
+    for pose in FLYBY:
+        parts, details = build_parts(pose)
+        parts = [dataclasses.replace(p, material=SILHOUETTE, shade=0.0) for p in parts]
+        parts, marks = rig.transform(parts, details, scale=FLYBY_SCALE, offset=FLYBY_OFFSET,
+                                     rotate=FLYBY_BANK, pivot=(112, 92))
+        eyes = [(x, y, EYE) for x, y, color in marks if color == EYE_CORE]
+        out.append(rig.render(parts, FLYBY_W, FLYBY_H, eyes))
+    return tuple(out)
 
 
 def mouth(pose_name):

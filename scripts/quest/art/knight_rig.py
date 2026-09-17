@@ -11,8 +11,8 @@ from dataclasses import dataclass
 from . import raster
 from .rig import Capsule, Ellipse, Material, Part, Poly, ramp
 
-FRAME_W, FRAME_H = 104, 76
-GROUND = 72          # frame row the soles rest on
+FRAME_W, FRAME_H = 104, 100
+GROUND = 96          # frame row the soles rest on (headroom above for raised blades)
 THIGH, SHIN = 11.0, 10.5
 TORSO = 17.0
 UPPER_ARM, FOREARM = 9.0, 8.5
@@ -51,7 +51,8 @@ class Pose:
     sword: float = 62.0               # blade direction from down, forward positive
     hip_y: float = None               # None: lock the lowest foot to the ground
     cape: tuple = ()                  # chain points from the cape simulation
-    smear: tuple = ()                 # (from_deg, to_deg) slash trail swept by the tip
+    smear: tuple = ()                 # ((upper, fore, sword) from, (upper, fore, sword) to): slash trail swept by the tip
+    streak: float = 0.0               # thrust speed-streak length behind the blade (0 none)
     planted: bool = False             # sword tip rests in the ground (sit/kneel)
 
 
@@ -232,7 +233,7 @@ def _cape(pose):
 
 
 def _smear(j, pose):
-    """Translucent trail of the area the blade swept since the previous frame."""
+    """Translucent trail of the area the blade swept since the previous frame (kept above the ground)."""
     if not pose.smear:
         return []
     (u0, f0, s0), (u1, f1, s1) = pose.smear
@@ -243,9 +244,24 @@ def _smear(j, pose):
         elbow = seg(shoulder, u0 + (u1 - u0) * t, UPPER_ARM)
         hand = seg(elbow, f0 + (f1 - f0) * t, FOREARM)
         angle = s0 + (s1 - s0) * t
-        outer.append(seg(hand, angle, BLADE_LEN + 1.5))
-        inner.append(seg(hand, angle, BLADE_LEN * (0.75 - 0.35 * t)))
+        ox, oy = seg(hand, angle, BLADE_LEN + 1.5)
+        ix, iy = seg(hand, angle, BLADE_LEN * (0.75 - 0.35 * t))
+        outer.append((ox, min(oy, GROUND - 1.0)))
+        inner.append((ix, min(iy, GROUND - 1.5)))
     return [Part(Poly(tuple(outer) + tuple(reversed(inner)), bevel=2.5), SMEAR, bulge=0.2, seam=False, cast=False)]
+
+
+def _streak(j, pose):
+    """Thrust speed lines: a long tapering wedge trailing back along the blade from past its tip."""
+    if not pose.streak:
+        return []
+    hand = j["near_hand"]
+    a = math.radians(pose.sword)
+    px, py = math.cos(a), -math.sin(a)
+    tip = seg(hand, pose.sword, BLADE_LEN + 4)
+    tail = seg(hand, pose.sword, BLADE_LEN - pose.streak)
+    wedge = Poly(((tail[0] + px * 0.6, tail[1] + py * 0.6), (tip[0], tip[1]), (tail[0] - px * 2.8, tail[1] - py * 2.8)), bevel=1.0)
+    return [Part(wedge, SMEAR, bulge=0.2, seam=False, cast=False)]
 
 
 def build_parts(pose):
@@ -262,4 +278,5 @@ def build_parts(pose):
     parts += _sword(j, pose)
     parts += _arm(j, "near", far=False)
     parts += _smear(j, pose)
+    parts += _streak(j, pose)
     return parts, _visor(j, pose)

@@ -243,3 +243,49 @@ def _quantize(buf, width, height, details):
 
 def ramp(*hexes):
     return tuple(raster.rgb(h) for h in hexes)
+
+
+def _map_shape(shape, point, k):
+    if isinstance(shape, Capsule):
+        return Capsule(point(shape.a), point(shape.b), shape.r0 * k, shape.r1 * k)
+    if isinstance(shape, Ellipse):
+        return Ellipse(point(shape.c), shape.rx * k, shape.ry * k, shape.angle)
+    return Poly(tuple(point(p) for p in shape.points), shape.bevel * k)
+
+
+def transform(parts, details=(), scale=1.0, offset=(0.0, 0.0), mirror=None, rotate=0.0, pivot=(0.0, 0.0)):
+    """Rotated, scaled, shifted and optionally mirrored copies of parts and details.
+
+    Geometry is transformed *before* shading, so the key light stays upper
+    left: a mirrored or banking character is lit correctly instead of carrying
+    baked highlights around. Order: rotate (degrees, clockwise on screen)
+    about `pivot`, scale, offset, then mirror across x = `mirror`.
+    """
+    ox, oy = offset
+    a = math.radians(rotate)
+    ca, sa = math.cos(a), math.sin(a)
+    px, py = pivot
+
+    def point(p):
+        rx, ry = p[0] - px, p[1] - py
+        x = (px + rx * ca - ry * sa) * scale + ox
+        y = (py + rx * sa + ry * ca) * scale + oy
+        return (mirror - x, y) if mirror is not None else (x, y)
+
+    moved = []
+    for part in parts:
+        shape = _map_shape(part.shape, point, scale)
+        tx, ty = part.tilt
+        tilt = (tx * ca - ty * sa, tx * sa + ty * ca)
+        if isinstance(shape, Ellipse):
+            angle = shape.angle + a
+            shape = Ellipse(shape.c, shape.rx, shape.ry, -angle if mirror is not None else angle)
+        if mirror is not None:
+            tilt = (-tilt[0], tilt[1])
+        fold = (part.fold[0] * scale, *part.fold[1:]) if part.fold else None
+        moved.append(Part(shape, part.material, part.bulge, tilt, part.shade, part.seam, part.cast, fold))
+    marks = []
+    for x, y, color in details:
+        mx, my = point((x, y))
+        marks.append((round(mx), round(my), color))
+    return moved, marks

@@ -10,10 +10,11 @@ import math
 import random
 
 from .. import raster
-from . import TITLES, Layer, Light, RegionArt, common, paint
+from . import TITLES, Layer, Light, Motif, RegionArt, common, motifs, paint
 
 C = raster.rgb
 TILE = 830
+RAIN_TILE = 128   # the rain falls four tiles for every one it drifts left: the streaks' own 1:4 slant
 SUN = (300, 182, 34)
 
 SKY = (
@@ -189,7 +190,7 @@ def build():
         title=TITLES["crimson"],
         layers=(
             Layer("sky", sky(), 0, 0.0),
-            Layer("smoke", smoke(), 50, 0.06),
+            Layer("smoke", smoke(), 50, 0.06, effect="sway"),
             Layer("ruins", ruins(), 90, 0.1, offset=-230),
             Layer("mid", battlefield_mid(), 130, 0.4),
             Layer("field", field(), 184, 1.0),
@@ -202,4 +203,11 @@ def build():
         particles=(C("#ff8a3d"), C("#ffd08a"), C("#8a8a8a")),
         motion="rise",
         grade=("#3a0808", 0.05),
+        motifs=(
+            Motif("bolt", motifs.lightning_bolt(), 74, -2, sky=True, effect="bolt"),
+            Motif("crows", motifs.flock(3, (40, 16), C("#140608"), rim=C("#c05a48"), seed="crimson-crows", size=(7, 3)),
+                  432, 58, sky=True, fps=5, flight=((0, 0, 0), (50, -500, -26), (100, -500, -26)), period=12.0, delay=6.0),
+            Motif("rain", motifs.rain_tile(), 0, -RAIN_TILE * 4, front=True, tile=(5, 6),
+                  flight=((0, 0, 0), (100, -RAIN_TILE, RAIN_TILE * 4)), period=1.68),
+        ),
     )

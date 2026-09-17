@@ -11,7 +11,7 @@ flagstone path.
 import random
 
 from .. import raster
-from . import TITLES, Layer, Light, RegionArt, common, paint
+from . import TITLES, Layer, Light, Motif, RegionArt, common, motifs, paint
 
 C = raster.rgb
 TILE = 830
@@ -57,6 +57,9 @@ def far():
     return canvas.freeze()
 
 
+FALLS = (C("#6c8fd0"), C("#9cc8ee"), C("#e0f2ff"), C("#f4f8ff"))
+
+
 def cliffs():
     """A rugged cliff with a waterfall feeding a lake that mirrors the glow (screen y 100-210)."""
     canvas = raster.Canvas(TILE, 110, wrap_x=True)
@@ -76,7 +79,7 @@ def cliffs():
             canvas.line(lx, ly, lx + rng.randint(4, 9), ly, C("#6a3d76"))
             canvas.line(lx, ly + 1, lx + rng.randint(3, 8), ly + 1, C("#24163a"))
     _lake(canvas, 12, 236, 80, 94)
-    paint.waterfall(canvas, 108, 32, 82, 7, (C("#6c8fd0"), C("#9cc8ee"), C("#e0f2ff"), C("#f4f8ff")), 7)
+    paint.waterfall(canvas, 108, 32, 82, 7, FALLS, 7)
     return canvas.freeze()
 
 
@@ -172,4 +175,9 @@ def build():
         ),
         particles=(C("#ffe9a8"), C("#ffd0f0"), C("#d2b0ff")),
         motion="drift",
+        motifs=(
+            Motif("falls", motifs.waterfall_flow(7, 50, FALLS), 77, 132, parallax=0.2, fps=10),
+            Motif("bats", motifs.flock(5, (60, 22), C("#120a1c"), seed="violet-bats"), 430, 30, sky=True, fps=6,
+                  flight=((0, 0, 0), (38, -540, 22), (100, -540, 22)), period=15.0, delay=4.0),
+        ),
     )
