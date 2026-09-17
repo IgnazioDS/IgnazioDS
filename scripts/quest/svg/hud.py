@@ -1,59 +1,24 @@
-"""HUD and overlays: health, souls counter, dates, chapter titles, boss bar,
-victory banner, fades and the eleventh.dev footer.
+"""HUD and overlays: the knight's portrait and health, the souls counter, foe
+nameplates, the quest's contribution strip, the wyrm's bar, fades and the
+eleventh.dev footer.
 """
 
-import dataclasses
-from dataclasses import dataclass
-
-from .. import layout
-from ..art import effects, font, raster, sprite
-from ..art.scenery import TITLES
+from .. import bestiary, layout
+from ..art import effects, font
+from ..art import hud as art
 from . import smil
+from .assets import centered_use
+from .cards import BOSS_NAME, short_date
 
-MONTHS = ("JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC")
-ROMAN = ("I", "II", "III", "IV", "V")
-BOSS_NAME = "THE ASHEN WYRM"
-HP_X, HP_Y, HP_W = 8, 7, 72
-BOSS_BAR_W = 150
-MIN_CARD_HOLD = 0.5
-
-
-@dataclass(frozen=True)
-class Card:
-    key: str
-    start: float
-    hold: float
-    fade: float
-
-    @property
-    def end(self):
-        return self.start + 2 * self.fade + self.hold
-
-
-def card_schedule(script):
-    """Title cards in play order; overlapping cards are shortened, then delayed.
-
-    Tiny rosters switch chapters faster than a card can play, so a later card
-    first trims the earlier one's hold and, if that is not enough, waits for it.
-    """
-    wanted = [Card("game-title", 0.2, 1.6, 0.35)]
-    wanted += [Card(f"title-{c.region}", c.title_t, 1.7, 0.5) for c in script.chapters]
-    wanted += [Card("boss-splash", script.boss.land_t, 1.1, 0.3), Card("victory", script.boss.banner_t, 1.9, 0.5)]
-    placed = []
-    for card in sorted(wanted, key=lambda c: c.start):
-        if placed and card.start < placed[-1].end:
-            prev = placed[-1]
-            placed[-1] = dataclasses.replace(prev, hold=max(MIN_CARD_HOLD, card.start - prev.start - 2 * prev.fade))
-            card = dataclasses.replace(card, start=max(card.start, placed[-1].end))
-        room = script.duration - 0.05 - card.start - 2 * card.fade
-        if room < MIN_CARD_HOLD:
-            continue
-        placed.append(dataclasses.replace(card, hold=min(card.hold, room)))
-    return tuple(placed)
-
-
-def _card(script, key):
-    return next((card for card in card_schedule(script) if card.key == key), None)
+PORTRAIT = (4, 3)
+HP_FRAME, HP_FRAME_W = (28, 10), 86
+HP_X, HP_Y, HP_W, HP_H = 31, 12, 80, 6
+SOULS_PLATE = (layout.WIDTH - 108, 4)
+BOSS_BAR_W, BOSS_BAR_Y = 150, 22
+PLATE_Y, PLATE_LOW_Y, PLATE_MARGIN = 4, 36, 3
+STRIP_X, STRIP_Y, SQUARE, SQUARE_STEP = 8, layout.HEIGHT - 11, 5, 6
+EMPTY_DAY = "#161b22"
+HUD_FADE_IN = 0.6
 
 
 def date_windows(script):
@@ -68,27 +33,15 @@ def date_windows(script):
     return tuple(windows)
 
 
-def short_date(iso):
-    _, month, day = iso.split("-")
-    return f"{MONTHS[int(month) - 1]} {int(day)}"
+def visibility(script):
+    """Hidden over the prologue vista, in with chapter I, and out with the world in the final fade.
 
-
-def _stack(top, bottom, gap=1):
-    width = max(top.width, bottom.width)
-    canvas = raster.Canvas(width, top.height + gap + bottom.height)
-    canvas.blit(top, (width - top.width) // 2, 0)
-    canvas.blit(bottom, (width - bottom.width) // 2, top.height + gap)
-    return canvas.freeze()
-
-
-def _centered_use(asset, cy):
-    return f'<use href="#{asset.id}" x="{smil.num(layout.WIDTH / 2 - asset.width / 2)}" y="{cy}"/>'
-
-
-def _fade_card(card, duration):
-    t_in, fade, hold = card.start, card.fade, card.hold
-    points = [(0.0, "0"), (t_in, "0"), (t_in + fade, "1"), (t_in + fade + hold, "1"), (t_in + 2 * fade + hold, "0")]
-    return smil.linear("opacity", points, duration)
+    The HUD is drawn above the black fade overlay, so it must fade itself or it
+    would hang lit over black and blink out at the loop seam.
+    """
+    start, fade = script.prologue.end, script.epilogue.fade_t
+    points = [(0.0, "0"), (start, "0"), (start + HUD_FADE_IN, "1"), (fade, "1"), (script.duration, "0")]
+    return smil.linear("opacity", points, script.duration)
 
 
 def fade_overlay(script):
@@ -99,15 +52,18 @@ def fade_overlay(script):
     )
 
 
-def health_bar(script):
+def health_bar(script, book):
+    """The knight's portrait medallion beside an iron-framed health bar."""
     d = script.duration
     widths = [(t, smil.num(HP_W * hp)) for t, hp in script.health]
     anim = smil.linear("width", widths, d)
+    portrait = book.image("hud-portrait", art.portrait())
+    frame = book.image("hud-hp-frame", art.bar_frame(HP_FRAME_W))
     return (
-        f'<rect x="{HP_X - 2}" y="{HP_Y - 2}" width="{HP_W + 4}" height="9" fill="#07050a"/>'
-        f'<rect x="{HP_X - 1}" y="{HP_Y - 1}" width="{HP_W + 2}" height="7" fill="#1a0f14" stroke="#4a3a55" stroke-width="1"/>'
-        f'<rect x="{HP_X}" y="{HP_Y}" width="{HP_W}" height="5" fill="#8e1a2b">{anim}</rect>'
-        f'<rect x="{HP_X}" y="{HP_Y}" width="{HP_W}" height="1" fill="#e0485c">{anim}</rect>'
+        f'<use href="#{frame.id}" x="{HP_FRAME[0]}" y="{HP_FRAME[1]}"/>'
+        f'<rect x="{HP_X}" y="{HP_Y}" width="{HP_W}" height="{HP_H}" fill="#8e1a2b">{anim}</rect>'
+        f'<rect x="{HP_X}" y="{HP_Y}" width="{HP_W}" height="2" fill="#e0485c">{anim}</rect>'
+        f'<use href="#{portrait.id}" x="{PORTRAIT[0]}" y="{PORTRAIT[1]}"/>'
     )
 
 
@@ -115,78 +71,73 @@ def souls_counter(script, roster, book):
     d = script.duration
     ax, ay = layout.SOULS_ANCHOR
     icon = book.image("wisp", effects.wisp())
-    parts = [f'<use href="#{icon.id}" x="{ax - 5}" y="{ay - 5}"/>']
+    plate = book.image("hud-souls-plate", art.souls_plate())
+    parts = [f'<use href="#{plate.id}" x="{SOULS_PLATE[0]}" y="{SOULS_PLATE[1]}"/>',
+             f'<use href="#{icon.id}" x="{ax - 5}" y="{ay - 5}"/>']
     states = list(script.souls)
     for i, (t, value) in enumerate(states):
         end = states[i + 1][0] if i + 1 < len(states) else d
         label = book.image(f"souls-{value}", font.render(f"{value:04d}", font.SOUL))
-        visibility = smil.windows([(t, end)], d) if len(states) > 1 else ""
+        shown = smil.windows([(t, end)], d) if len(states) > 1 else ""
         base = "1" if i == 0 else "0"
         parts.append(
-            f'<g opacity="{base}">{visibility}<use href="#{label.id}" x="{ax + 8}" y="{ay - 5}"/></g>'
+            f'<g opacity="{base}">{shown}<use href="#{label.id}" x="{ax + 8}" y="{ay - 5}"/></g>'
         )
     year = book.image("year", font.render(f"YEAR {roster.year_total}", font.BONE))
-    parts.append(f'<use href="#{year.id}" x="{layout.WIDTH - 6 - year.width}" y="{ay + 6}" opacity="0.8"/>')
+    parts.append(f'<use href="#{year.id}" x="{layout.WIDTH - 10 - year.width}" y="{SOULS_PLATE[1] + 16}" opacity="0.8"/>')
     return "".join(parts)
 
 
-def date_labels(script, book):
+def nameplates(script, book):
+    """Who the knight is fighting: the creature, its day, and that day's real contribution count."""
     d = script.duration
+    foes = [(enc.entry, bestiary.KINDS[enc.kind].title, "elite" if enc.elite else "foe") for enc in script.encounters]
+    foes.append((script.boss.entry, BOSS_NAME, "boss"))
     parts = []
-    for iso, start, end in date_windows(script):
+    for (iso, start, end), (entry, title, style) in zip(date_windows(script), foes):
         if end <= start:
             continue
-        label = book.image(f"date-{iso}", font.render(short_date(iso), font.EMBER))
-        parts.append(f'<g opacity="0">{smil.windows([(start, end)], d)}{_centered_use(label, 4)}</g>')
+        plate = art.nameplate(title, short_date(iso), entry.count, entry.tier, style)
+        asset = book.image(f"plate-{iso}", plate)
+        x, y = plate_position(plate.width)
+        parts.append(f'<g opacity="0">{smil.windows([(start, end)], d)}<use href="#{asset.id}" x="{x}" y="{y}"/></g>')
     return "".join(parts)
 
 
-def chapter_titles(script, book):
+def plate_position(width):
+    """Centred in the gap between the health frame and the souls plate, or on a second row if too wide."""
+    left, right = HP_FRAME[0] + HP_FRAME_W + PLATE_MARGIN, SOULS_PLATE[0] - PLATE_MARGIN
+    if width > right - left:
+        return round((layout.WIDTH - width) / 2), PLATE_LOW_Y
+    return min(max(round((layout.WIDTH - width) / 2), left), right - width), PLATE_Y
+
+
+def quest_strip(script, roster, book):
+    """The quest as a contribution-graph row: each day lights up in its green when its foe falls."""
     d = script.duration
+    fallen = {enc.entry.date: enc.death_t for enc in script.encounters}
+    fallen[script.boss.entry.date] = script.boss.death_t
+    days = sorted([*roster.entries, roster.boss], key=lambda entry: entry.date)
+    column = {entry.date: i for i, entry in enumerate(days)}
     parts = []
-    for i, chapter in enumerate(script.chapters):
-        card = _card(script, f"title-{chapter.region}")
-        if card is None:
-            continue
-        top = font.render(f"CHAPTER {ROMAN[i]}", font.BONE)
-        bottom = raster.scale(font.render(TITLES[chapter.region], font.GOLD), 2)
-        image = book.image(f"title-{chapter.region}", _stack(top, bottom))
-        parts.append(f'<g opacity="0">{_fade_card(card, d)}{_centered_use(image, 46)}</g>')
+    for i, entry in enumerate(days):
+        x = STRIP_X + i * SQUARE_STEP
+        lit = smil.discrete("fill", [(0.0, EMPTY_DAY), (fallen[entry.date], art.TIER_COLORS[entry.tier])], d)
+        parts.append(f'<rect x="{x}" y="{STRIP_Y}" width="{SQUARE}" height="{SQUARE}" rx="1" fill="{EMPTY_DAY}">{lit}</rect>')
+    windows = date_windows(script)
+    marks = [(start, STRIP_X + column[iso] * SQUARE_STEP - 1.5, STRIP_Y - 1.5) for iso, start, end in windows if end > start]
+    if marks:
+        hop = smil.translate([(t, x, y) for t, x, y in marks], d, calc="discrete")
+        shown = smil.windows([(start, end) for _, start, end in windows if end > start], d)
+        parts.append(f'<g opacity="0">{shown}<g>{hop}<rect width="{SQUARE + 3}" height="{SQUARE + 3}" rx="1.5" '
+                     f'fill="none" stroke="#f5c55c" stroke-width="1" class="lf-pulse"/></g></g>')
     return "".join(parts)
-
-
-def game_title(script, book):
-    """Opening card: the quest's name over the first region."""
-    top = raster.scale(font.render("THE ELEVENTH KNIGHT", font.GOLD), 2)
-    sub = font.render("A QUEST THROUGH MY LAST DAYS OF CODE", font.BONE)
-    image = book.image("game-title", _stack(top, sprite.pad(sub, sub.width, sub.height + 2, 0, 2)))
-    card = _card(script, "game-title")
-    if card is None:
-        return ""
-    return f'<g opacity="0">{_fade_card(card, script.duration)}{_centered_use(image, 52)}</g>'
-
-
-def boss_intro(script, book):
-    """Letterbox bars while the wyrm descends, and its name splashed as it lands."""
-    boss, d = script.boss, script.duration
-    bars = [(0.0, "0"), (boss.enter_t, "0"), (boss.enter_t + 0.5, "16"), (boss.land_t + 1.6, "16"), (boss.land_t + 2.1, "0")]
-    height = smil.linear("height", bars, d)
-    offset = smil.linear("y", [(t, smil.num(layout.HEIGHT - float(v))) for t, v in bars], d)
-    bars_svg = (
-        f'<rect x="0" y="0" width="{layout.WIDTH}" height="0" fill="#050308">{height}</rect>'
-        f'<rect x="0" y="{layout.HEIGHT}" width="{layout.WIDTH}" height="0" fill="#050308">{height}{offset}</rect>'
-    )
-    card = _card(script, "boss-splash")
-    if card is None:
-        return bars_svg
-    image = book.image("boss-splash", raster.scale(font.render(BOSS_NAME, font.EMBER), 2))
-    return f'{bars_svg}<g opacity="0">{_fade_card(card, d)}{_centered_use(image, 66)}</g>'
 
 
 def boss_bar(script, book):
     d = script.duration
     boss = script.boss
-    name = book.image("boss-name", font.render(BOSS_NAME, font.BONE))
+    frame = book.image("hud-boss-frame", art.bar_frame(BOSS_BAR_W + 6, 9))
     total = max(1, len(boss.hits))
     widths = [(0.0, BOSS_BAR_W), (boss.land_t, BOSS_BAR_W)]
     for i, hit in enumerate(boss.hits, start=1):
@@ -195,23 +146,10 @@ def boss_bar(script, book):
     x = layout.WIDTH / 2 - BOSS_BAR_W / 2
     return (
         f'<g opacity="0">{smil.windows([(boss.land_t, boss.death_t + 0.6)], d)}'
-        f'{_centered_use(name, 15)}'
-        f'<rect x="{smil.num(x - 1)}" y="27" width="{BOSS_BAR_W + 2}" height="5" fill="#07050a" stroke="#4a3a55"/>'
-        f'<rect x="{smil.num(x)}" y="28" width="{BOSS_BAR_W}" height="3" fill="#b8402a">{anim}</rect></g>'
+        f'{centered_use(frame, BOSS_BAR_Y)}'
+        f'<rect x="{smil.num(x)}" y="{BOSS_BAR_Y + 2}" width="{BOSS_BAR_W}" height="5" fill="#b8402a">{anim}</rect>'
+        f'<rect x="{smil.num(x)}" y="{BOSS_BAR_Y + 2}" width="{BOSS_BAR_W}" height="1" fill="#ff8a5a">{anim}</rect></g>'
     )
-
-
-def victory_banner(script, book):
-    boss = script.boss
-    top = raster.scale(font.render("WYRM FELLED", font.GOLD), 2)
-    sub = font.render(
-        f"BIGGEST DAY · {short_date(boss.entry.date)} · {boss.entry.count} CONTRIBUTIONS", font.BONE
-    )
-    image = book.image("victory", _stack(top, sprite.pad(sub, sub.width, sub.height + 2, 0, 2)))
-    card = _card(script, "victory")
-    if card is None:
-        return ""
-    return f'<g opacity="0">{_fade_card(card, script.duration)}{_centered_use(image, 52)}</g>'
 
 
 def footer(book):

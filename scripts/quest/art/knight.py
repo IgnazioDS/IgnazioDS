@@ -50,6 +50,44 @@ ATTACK = (
          near_upper=30, near_fore=58, sword=62, far_upper=0, far_fore=20),
 )
 
+# Rising cut: from low behind the hip up through the foe (the combo's second blow).
+DEEP_LEGS = dict(near_thigh=34, near_shin=26, far_thigh=-36, far_shin=-30)
+SWEEP = (
+    Pose(lean=14, **DEEP_LEGS, near_upper=-40, near_fore=-18, sword=-80, far_upper=24, far_fore=54),
+    Pose(lean=8, **LUNGE_LEGS, near_upper=58, near_fore=80, sword=24, far_upper=10, far_fore=40),
+    Pose(lean=2, **LUNGE_LEGS, near_upper=112, near_fore=132, sword=132, far_upper=-6, far_fore=20,
+         smear=((58, 80, 24), (112, 132, 132))),
+    Pose(lean=-4, **STEP_LEGS, near_upper=150, near_fore=166, sword=172, far_upper=-14, far_fore=10),
+    Pose(lean=6, near_thigh=16, near_shin=6, far_thigh=-14, far_shin=-18,
+         near_upper=24, near_fore=58, sword=64, far_upper=-4, far_fore=16),
+)
+
+# Lunging thrust: blade drawn back to the chest, then driven straight through (the third blow, and the riposte).
+THRUST_LEGS = dict(near_thigh=46, near_shin=20, far_thigh=-42, far_shin=-22)
+THRUST = (
+    Pose(lean=-6, **STEP_LEGS, near_upper=-24, near_fore=64, sword=92, far_upper=40, far_fore=92),
+    Pose(lean=24, **THRUST_LEGS, near_upper=84, near_fore=90, sword=92, far_upper=-20, far_fore=-6, streak=22.0),
+    Pose(lean=26, **THRUST_LEGS, near_upper=90, near_fore=92, sword=93, far_upper=-24, far_fore=-10, streak=8.0),
+    Pose(lean=8, near_thigh=18, near_shin=8, far_thigh=-16, far_shin=-18,
+         near_upper=22, near_fore=58, sword=62, far_upper=0, far_fore=20),
+)
+
+# Backward dodge roll: crouch, tuck and tumble, come up on guard.
+TUCK = Pose(lean=34, head=14, near_thigh=86, near_shin=-18, far_thigh=70, far_shin=-34,
+            near_upper=60, near_fore=118, sword=26, far_upper=50, far_fore=110)
+CROUCH = Pose(lean=24, head=8, near_thigh=58, near_shin=-4, far_thigh=36, far_shin=-26,
+              near_upper=40, near_fore=90, sword=100, far_upper=30, far_fore=80)
+
+# The finisher: crouch and spring, blade raised high in the air, then driven straight down.
+LEAP = (
+    Pose(lean=22, head=6, near_thigh=72, near_shin=-18, far_thigh=48, far_shin=-40,
+         near_upper=-40, near_fore=6, sword=-118, far_upper=24, far_fore=62),
+    Pose(hip_y=GROUND - 30.0, lean=-10, head=-10, near_thigh=58, near_shin=-26, far_thigh=18, far_shin=-44,
+         near_upper=170, near_fore=196, sword=214, far_upper=150, far_fore=186),
+    Pose(hip_y=GROUND - 30.0, lean=12, head=16, near_thigh=74, near_shin=12, far_thigh=46, far_shin=-12,
+         near_upper=44, near_fore=-6, sword=10, far_upper=36, far_fore=-2, streak=0.0),
+)
+
 BRACED = dict(near_thigh=14, near_shin=4, far_thigh=-22, far_shin=-26)
 PARRY = (
     Pose(lean=-2, **BRACED, near_upper=95, near_fore=150, sword=160, far_upper=80, far_fore=140),
@@ -63,6 +101,12 @@ SIT = tuple(
     Pose(hip_y=GROUND - 5.5, lean=12 + d, head=8, near_thigh=82, near_shin=14, far_thigh=76, far_shin=24,
          near_upper=40, near_fore=96, sword=0, far_upper=30, far_fore=70, planted=True)
     for d in (0.0, 1.2)
+)
+
+CHEER = tuple(
+    Pose(lean=-4 - d, head=-12, near_thigh=16, near_shin=6, far_thigh=-18, far_shin=-22,
+         near_upper=170 + d, near_fore=176 + d, sword=176 + 2 * d, far_upper=-16, far_fore=6)
+    for d in (0.0, 3.0)
 )
 
 KNEEL = tuple(
@@ -127,12 +171,30 @@ def _with_capes(poses, wind):
     return tuple(dataclasses.replace(p, cape=c) for p, c in zip(poses, chains))
 
 
-def _render(pose, flash=False):
+def _render(pose, flash=False, spin=0.0):
     parts, details = build_parts(pose)
+    if spin:
+        parts, details = _tumbled(parts, details, spin)
     if flash:
         parts = [dataclasses.replace(part, material=FLASH, shade=0.0) for part in parts]
         details = [(x, y, c) for x, y, c in details if raster.alpha_of(c) == 255]
     return rig.render(parts, FRAME_W, FRAME_H, details)
+
+
+def _tumbled(parts, details, spin):
+    """The whole rig turned about the hips, then set back down on the ground line."""
+    hip = joints(TUCK)["hip"]
+    parts, details = rig.transform(parts, details, rotate=spin, pivot=hip)
+    lowest = max(_lowest(part.shape) for part in parts)
+    return rig.transform(parts, details, offset=(0.0, GROUND + 1 - lowest))
+
+
+def _lowest(shape):
+    if isinstance(shape, rig.Capsule):
+        return max(shape.a[1] + shape.r0, shape.b[1] + shape.r1)
+    if isinstance(shape, rig.Ellipse):
+        return shape.c[1] + max(shape.rx, shape.ry)
+    return max(y for _, y in shape.points)
 
 
 @lru_cache(maxsize=1)
@@ -145,10 +207,19 @@ def frames():
     hurt = _with_capes((HURT, HURT), lambda f: 0.35)
     sit = _with_capes(SIT, lambda f: -0.03)
     kneel = _with_capes(KNEEL, lambda f: -0.05)
+    cheer = _with_capes(CHEER, lambda f: -0.55 - 0.15 * f)
+    sweep = _with_capes(SWEEP, lambda f: (0.2, -0.5, -0.8, -0.4, -0.15)[f])
+    thrust = _with_capes(THRUST, lambda f: (0.1, -0.9, -0.7, -0.2)[f])
+    roll = _with_capes((CROUCH, TUCK, TUCK, CROUCH), lambda f: (0.4, 0.6, 0.5, 0.3)[f])
+    leap = _with_capes(LEAP, lambda f: (0.2, 0.9, 1.1)[f])
     named = {}
-    for group, poses in (("idle", idle), ("walk", walk), ("atk", attack), ("parry", parry), ("sit", sit), ("kneel", kneel)):
+    groups = (("idle", idle), ("walk", walk), ("atk", attack), ("parry", parry), ("sit", sit), ("kneel", kneel),
+              ("cheer", cheer), ("swp", sweep), ("thr", thrust), ("leap", leap))
+    for group, poses in groups:
         for i, pose in enumerate(poses):
             named[f"{group}{i}"] = _render(pose)
+    for i, (pose, spin) in enumerate(zip(roll, (0.0, -110.0, -230.0, 0.0))):
+        named[f"roll{i}"] = _render(pose, spin=spin)
     named["hurt0"] = _render(hurt[0])
     named["hurt1"] = _render(hurt[1], flash=True)
     return named

@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <sub>self-playing. each monster = one of my last 24 active days, tougher monster = busier day. the dragon = my biggest day. souls = the real contribution count. new quest every day.</sub>
+  <sub>self-playing. each foe = one of my last 24 active days: busier day, tougher foe, and each chapter's busiest day comes as an elite. the dragon = my biggest day. souls and the green strip = my real contributions. new quest every day.</sub>
 </p>
 
 # Ignazio De Santis

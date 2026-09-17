@@ -2,8 +2,9 @@
 
 import math
 import random
+from functools import lru_cache
 
-from . import raster
+from . import raster, sprite
 
 C = raster.rgb
 SMOKE = (C("#1b1420"), C("#2e2433"), C("#453848"))
@@ -169,5 +170,119 @@ def bonfire(frames=4, width=28, height=34):
         canvas.put(cx, 3, C("#a01f35"))
         for _ in range(4):
             canvas.put(cx + rng.randint(-6, 6), rng.randint(0, 12), EMBERS[rng.randint(0, 2)])
+        out.append(canvas.freeze())
+    return tuple(out)
+
+
+SLASH_SIZE = 44
+CUT_ANGLES = {"slash": 52.0, "rise": -38.0, "thrust": 0.0, "riposte": 0.0, "plunge": 90.0}   # degrees, screen space
+COLD = (C("#ffffff"), raster.rgba("#bfe8ff", 230), raster.rgba("#5fb8ff", 150))
+GILDED = (C("#ffffff"), raster.rgba("#ffe7a0", 235), raster.rgba("#ff9a3a", 160))
+
+
+def slash_mark(blow, palette=COLD, frames=3):
+    """A bright cut across the target along the blow's line: full stroke, thinning, then fading glints."""
+    angle = math.radians(CUT_ANGLES[blow])
+    ux, uy = math.cos(angle), math.sin(angle)
+    half = 19 if blow in ("slash", "rise", "plunge") else 16
+    c = (SLASH_SIZE - 1) / 2
+    rng = random.Random(f"slash-{blow}")
+    out = []
+    for f in range(frames):
+        canvas = raster.Canvas(SLASH_SIZE, SLASH_SIZE)
+        width = (3.2, 1.8, 0.9)[f]
+        reach = half * (1.0, 1.12, 1.18)[f]
+        for y in range(SLASH_SIZE):
+            for x in range(SLASH_SIZE):
+                along = (x - c) * ux + (y - c) * uy
+                across = abs(-(x - c) * uy + (y - c) * ux)
+                color = _cut_color(f, x, y, along, across, width, reach, palette)
+                if color is not None:
+                    canvas.put(x, y, color)
+        for _ in range(6 if f < 2 else 3):
+            t = rng.uniform(-reach, reach)
+            off = rng.uniform(2, 6 + 3 * f) * rng.choice((-1, 1))
+            canvas.put(round(c + ux * t - uy * off), round(c + uy * t + ux * off), palette[1 + (f > 0)])
+        out.append(canvas.freeze())
+    return tuple(out)
+
+
+def _cut_color(frame, x, y, along, across, width, reach, palette):
+    """Color of one pixel of a cut mark: a lens-shaped stroke, then a dotted fading line on the last frame."""
+    if abs(along) > reach:
+        return None
+    if frame == 2:
+        return palette[2] if across < 0.8 and (x * 7 + y * 3) % 4 == 0 else None
+    w = width * math.sin(math.pi * (0.5 + along / (2 * reach)))
+    if across <= w * 0.45:
+        return palette[0]
+    if across <= w:
+        return palette[1]
+    return palette[2] if across <= w + 1.0 and frame == 0 else None
+
+
+BURST_SIZE = 26
+
+
+def impact_burst(palette=COLD, frames=3):
+    """Contact flash where steel meets: a hot core with rays, a thin ring, then scattered sparks."""
+    c = (BURST_SIZE - 1) / 2
+    rng = random.Random("burst")
+    sparks = [(rng.uniform(0, math.tau), rng.uniform(6, 12)) for _ in range(9)]
+    out = []
+    for f in range(frames):
+        canvas = raster.Canvas(BURST_SIZE, BURST_SIZE)
+        if f == 0:
+            canvas.disc(c, c, 2.6, palette[1])
+            canvas.disc(c, c, 1.4, palette[0])
+            for k in range(4):
+                a = k * math.pi / 2 + math.pi / 4
+                for r in range(3, 11):
+                    canvas.put(round(c + math.cos(a) * r), round(c + math.sin(a) * r), palette[1] if r < 7 else palette[2])
+        elif f == 1:
+            for k in range(28):
+                a = k / 28 * math.tau
+                canvas.put(round(c + math.cos(a) * 7), round(c + math.sin(a) * 7), palette[1] if k % 2 else palette[2])
+            canvas.put(round(c), round(c), palette[0])
+        for a, r in sparks:
+            dist = r * (0.6 + 0.35 * f)
+            if f > 0 or r > 9:
+                canvas.put(round(c + math.cos(a) * dist), round(c + math.sin(a) * dist), palette[2 if f == 2 else 1])
+        out.append(canvas.freeze())
+    return tuple(out)
+
+
+@lru_cache(maxsize=None)
+def hit_flash(blow, heavy):
+    """The cut mark over its contact burst, one SLASH_SIZE sheet per blow and weight."""
+    palette = GILDED if heavy else COLD
+    offset = (SLASH_SIZE - BURST_SIZE) // 2
+    frames = []
+    for mark, burst in zip(slash_mark(blow, palette), impact_burst(palette)):
+        canvas = raster.Canvas(SLASH_SIZE, SLASH_SIZE)
+        canvas.blit(sprite.pad(burst, SLASH_SIZE, SLASH_SIZE, offset, offset), 0, 0)
+        canvas.blit(mark, 0, 0)
+        frames.append(canvas.freeze())
+    return tuple(frames)
+
+
+DUST_W, DUST_H = 150, 56
+DUST = (raster.rgba("#2a2230", 230), raster.rgba("#4a3e52", 200), raster.rgba("#6e5f7a", 160))
+
+
+def dust_cloud(frames=6):
+    """A wide cloud of stone dust rolling out along the ground when something huge falls."""
+    rng = random.Random("crash-dust")
+    puffs = [(rng.uniform(-1, 1), rng.uniform(0.2, 1.0), rng.uniform(0.6, 1.2)) for _ in range(26)]
+    out = []
+    for f in range(frames):
+        canvas = raster.Canvas(DUST_W, DUST_H)
+        progress = (f + 1) / frames
+        for side, lift, size in puffs:
+            x = DUST_W / 2 + side * progress * DUST_W * 0.45
+            y = DUST_H - 6 - lift * progress * 26
+            radius = size * (4 + 9 * progress) * (1.1 - 0.5 * progress)
+            tone = DUST[min(2, int(lift * 3))]
+            _dithered_disc(canvas, x, y, radius, tone, keep=1.2 - progress * 0.9)
         out.append(canvas.freeze())
     return tuple(out)

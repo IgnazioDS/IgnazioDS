@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Phase:
-    kind: str     # intro | walk | fight | rest | transition | boss | outro
+    kind: str     # prologue | walk | fight | rest | transition | boss | epilogue
     start: float
     end: float
 
@@ -23,16 +23,26 @@ class Chapter:
 
 
 @dataclass(frozen=True)
+class Attack:
+    t: float              # the monster starts its windup
+    outcome: str          # hurt | parry | dodge
+
+
+@dataclass(frozen=True)
 class Encounter:
     index: int
     entry: object         # roster.Entry
     chapter: int
+    kind: str             # bestiary key of the creature this day takes the shape of
+    elite: bool           # the chapter's champion: marked, tougher, strikes back
     path: tuple           # ((t, screen_x), ...) spawn -> engage, piecewise linear
     engage_t: float
-    attack_t: object      # float or None: the monster's own swing
-    knight_hurt: bool     # True: the swing lands; False: parried
+    attacks: tuple        # Attack, in order: the monster's own swings and how each ended
     hits: tuple           # times the knight's blade connects
+    blows: tuple          # blow name per hit: slash | rise | thrust | riposte
+    heavy: tuple          # per hit: a crushing blow (killing blow on a tough foe, or a riposte) that freezes and shakes
     death_t: float
+    remains: tuple = ()   # ((t, screen_x), ...) the body, carried off by the scroll until gone
 
 
 @dataclass(frozen=True)
@@ -44,14 +54,45 @@ class Rest:
 
 
 @dataclass(frozen=True)
+class Flight:
+    takeoff: float        # the wyrm climbs away over the city
+    dive: float           # it reappears at the right edge, swooping low
+    pass_t: float         # directly over the knight
+    back: float           # it re-enters from the sky for a second descent
+    land: float           # back at its hover spot (screen shake, roar)
+    outcome: str          # dodge | hurt
+
+
+@dataclass(frozen=True)
 class BossFight:
     entry: object
     enter_t: float        # dragon starts its descent
     land_t: float         # dragon reaches its hover spot (screen shake)
     breaths: tuple        # ((start, end), ...) fire breath windows
     hits: tuple           # times the knight's blade connects
-    death_t: float
+    death_t: float        # the plunge
     banner_t: float
+    blows: tuple = ()     # blow per hit; the last is the plunge
+    flights: tuple = ()   # Flight
+
+
+@dataclass(frozen=True)
+class Prologue:
+    title_t: float        # the game's title card begins
+    flyby: tuple          # (start, end): the wyrm crosses the blood moon
+    rise_t: float         # the knight gets up from the fire
+    depart_t: float       # ...and sets off; the vista starts to scroll
+    end: float            # chapter I replaces the vista under the fade
+    camp: tuple           # bonfire ((t, screen_x), ...)
+
+
+@dataclass(frozen=True)
+class Epilogue:
+    cheer_t: float        # the knight raises his sword over the fallen wyrm
+    camp_t: float         # he plants it, and the fire takes
+    stats_t: float        # the quest-complete card begins
+    fade_t: float         # the final fade to black begins (everything drawn over it must fade too)
+    camp: tuple           # bonfire ((t, screen_x), ...)
 
 
 @dataclass(frozen=True)
@@ -67,4 +108,7 @@ class QuestScript:
     souls: tuple          # ((t, total), ...) starts at (0, 0)
     health: tuple         # ((t, fraction), ...) linear keyframes
     fades: tuple          # ((t, black_opacity), ...) linear keyframes
-    parries: tuple        # times of parry sparks
+    knight_moves: tuple   # ((t, dx, dy), ...) linear: lunges, dodge rolls, knockbacks and the leap
+    shakes: tuple         # ((t, amplitude), ...) screen shakes for crushing blows
+    prologue: Prologue
+    epilogue: Epilogue

@@ -1,26 +1,33 @@
-"""Actors: the knight, monsters, and the effects of their fights."""
+"""Actors: the knight and the monsters (charging, squaring up, striking,
+dying, and the remains they leave).
+"""
 
-from .. import layout
-from ..art import effects, font, knight, monsters
-from ..sim import WISP_FLIGHT
+from functools import lru_cache
+
+from .. import bestiary, layout
+from ..art import knight, monsters, raster, sprite
+from ..combat import WINDUP_LEAD
 from . import smil
 
-MOVE_FPS, MENACE_FPS = 8, 3
+MOVE_FPS, MENACE_FPS, DEATH_FPS = 8, 3, 9
 ATTACK_HOLD, FLASH_HOLD = 0.32, 0.09
+REMAINS_FADE = 0.45
+LUNGE = 10
+AURA_INNER, AURA_OUTER = raster.rgba("#ff3a52", 220), raster.rgba("#b0102a", 110)
 
 
 def _sheet_offsets(track_events, frame_w):
     return [(t, -index * frame_w, 0) for t, index in track_events]
 
 
-def _clip(sheet, animation):
+def _clip(sheet, animation, extra=""):
     return (
         f'<svg width="{sheet.frame_w}" height="{sheet.height}">'
-        f'<use href="#{sheet.id}">{animation}</use></svg>'
+        f'<g>{animation}{extra}<use href="#{sheet.id}"/></g></svg>'
     )
 
 
-def knight_actor(script, book, dash=""):
+def knight_actor(script, book):
     frames = knight.frames()
     names = layout.KNIGHT_FRAMES
     missing = [name for name in names if name not in frames]
@@ -31,108 +38,95 @@ def knight_actor(script, book, dash=""):
     events = [(t, index[name]) for t, name in script.knight_frames]
     anim = smil.translate(_sheet_offsets(events, sheet.frame_w), script.duration, calc="discrete")
     y = layout.GROUND_Y - layout.KNIGHT_FEET
-    return f'<g transform="translate({layout.KNIGHT_X} {y})"><g>{dash}{_clip(sheet, anim)}</g></g>'
+    moves = ""
+    if any(dx or dy for _, dx, dy in script.knight_moves):
+        moves = smil.translate(list(script.knight_moves), script.duration)
+    return f'<g transform="translate({layout.KNIGHT_X} {y})"><g>{moves}{_clip(sheet, anim)}</g></g>'
 
 
-def _monster_y(art, tier):
-    return layout.GROUND_Y - art.feet_y - layout.FLYER_LIFT.get(tier, 0)
+def standing_y(enc):
+    """Frame top while alive (flyers hover `lift` px higher)."""
+    art = monsters.art(enc.kind)
+    return layout.GROUND_Y - art.feet_y - bestiary.KINDS[enc.kind].lift
+
+
+def _fall_end(enc):
+    art = monsters.art(enc.kind)
+    return enc.death_t + FLASH_HOLD + (len(art.death) - 1) / DEATH_FPS
+
+
+def _frame_track(enc, art):
+    track = smil.DiscreteTrack(0)
+    moves = list(range(len(art.move)))
+    stance = [art.index("idle", k) for k in range(len(art.idle))]
+    spawn, dying = enc.path[0][0], enc.death_t + FLASH_HOLD
+    track.cycle(spawn, enc.engage_t, MOVE_FPS, moves)
+    track.cycle(enc.engage_t, dying, MENACE_FPS, stance)
+    for attack in enc.attacks:
+        land = attack.t + WINDUP_LEAD - 0.02
+        track.override(attack.t, land, art.index("windup"))
+        track.override(land, attack.t + ATTACK_HOLD, art.index("strike"))
+    for hit in enc.hits:
+        track.override(hit, hit + FLASH_HOLD, art.index("hurt"))
+    gone = enc.remains[-1][0]
+    last = len(art.death) - 1
+    for k in range(len(art.death)):
+        start = dying + k / DEATH_FPS
+        end = gone if k == last else dying + (k + 1) / DEATH_FPS
+        if start < end:
+            track.override(start, end, art.index("death", k))
+    return track
+
+
+def _path_points(enc):
+    """(t, x, y): the charge in, then the body falling (flyers) and scrolling away."""
+    y_alive = standing_y(enc)
+    y_dead = layout.GROUND_Y - monsters.art(enc.kind).feet_y
+    points = [(t, x, y_alive) for t, x in enc.path]
+    fall_end = _fall_end(enc)
+    remains = list(enc.remains)
+    times = sorted({t for t, _ in remains} | ({fall_end} if fall_end < remains[-1][0] else set()))
+    for t in times:
+        x = _lerp(remains, t)
+        k = min(1.0, max(0.0, (t - enc.death_t) / max(1e-6, fall_end - enc.death_t)))
+        points.append((t, x, y_alive + (y_dead - y_alive) * k * k))
+    return points
+
+
+def _lerp(path, t):
+    if t <= path[0][0]:
+        return path[0][1]
+    for (t0, x0), (t1, x1) in zip(path, path[1:]):
+        if t0 <= t <= t1:
+            return x0 if t1 - t0 < 1e-9 else x0 + (x1 - x0) * (t - t0) / (t1 - t0)
+    return path[-1][1]
+
+
+@lru_cache(maxsize=None)
+def _aura_frames(kind):
+    return tuple(sprite.aura(frame, AURA_INNER, AURA_OUTER) for frame in monsters.art(kind).frames)
 
 
 def monster_actors(script, book):
-    arts = monsters.roster()
     d = script.duration
     parts = []
     for enc in script.encounters:
-        tier = enc.entry.tier
-        art = arts[tier]
-        frames = (*art.move, *art.attack, art.hurt)
-        sheet = book.sheet(f"monster-{art.name}", frames)
-        windup_i, strike_i, hurt_i = len(art.move), len(art.move) + 1, len(art.move) + 2
-        spawn = enc.path[0][0]
-        track = smil.DiscreteTrack(0)
-        moves = list(range(len(art.move)))
-        track.cycle(spawn, enc.engage_t, MOVE_FPS, moves)
-        track.cycle(enc.engage_t, enc.death_t + FLASH_HOLD, MENACE_FPS, moves)
-        if enc.attack_t is not None:
-            track.override(enc.attack_t, enc.attack_t + ATTACK_HOLD / 2, windup_i)
-            track.override(enc.attack_t + ATTACK_HOLD / 2, enc.attack_t + ATTACK_HOLD, strike_i)
-        for hit in enc.hits:
-            track.override(hit, hit + FLASH_HOLD, hurt_i)
-        frame_anim = smil.translate(_sheet_offsets(track.events(), sheet.frame_w), d, calc="discrete")
-        y = _monster_y(art, tier)
-        motion = smil.translate([(t, x, y) for t, x in enc.path], d)
-        knock = smil.translate(
-            [(0.0, 0, 0)] + [p for hit in enc.hits for p in ((hit, 3, 0), (hit + FLASH_HOLD, 0, 0))],
-            d, calc="discrete",
-        )
+        art = monsters.art(enc.kind)
+        sheet = book.sheet(f"monster-{art.name}", art.frames)
+        spawn, gone = enc.path[0][0], enc.remains[-1][0]
+        frames = smil.translate(_sheet_offsets(_frame_track(enc, art).events(), sheet.frame_w), d, calc="discrete")
+        motion = smil.translate(_path_points(enc), d)
+        lunges = [p for a in enc.attacks for p in ((a.t + WINDUP_LEAD - 0.02, -LUNGE, 0), (a.t + ATTACK_HOLD, 0, 0))]
+        recoils = [p for hit in enc.hits for p in ((hit, 3, 0), (hit + FLASH_HOLD, 0, 0))]
+        knock = smil.translate([(0.0, 0, 0)] + lunges + recoils, d, calc="discrete")
+        fade = smil.linear("opacity", [(0.0, "1"), (max(spawn, gone - REMAINS_FADE), "1"), (gone, "0")], d)
+        aura = ""
+        if enc.elite:
+            glow = book.sheet(f"aura-{art.name}", _aura_frames(enc.kind))
+            aura = (f'<g opacity="0">{smil.windows([(spawn, enc.death_t + FLASH_HOLD)], d)}'
+                    f'<g class="lf-pulse"><use href="#{glow.id}"/></g></g>')
         parts.append(
-            f'<g opacity="0">{smil.windows([(spawn, enc.death_t + FLASH_HOLD)], d)}'
-            f'<g>{motion}<g>{knock}{_clip(sheet, frame_anim)}</g></g></g>'
-        )
-    return "".join(parts)
-
-
-def _center(enc, arts, book):
-    art = arts[enc.entry.tier]
-    sheet = book.sheet(f"monster-{art.name}", (*art.move, *art.attack, art.hurt))
-    x = layout.engage_x(enc.entry.tier) + sheet.frame_w / 2
-    y = _monster_y(art, enc.entry.tier) + sheet.height * 0.55
-    return x, y
-
-
-def death_effects(script, book):
-    """Ash bursts and rising '+N' soul counts where each monster falls."""
-    d = script.duration
-    arts = monsters.roster()
-    burst_frames = effects.ash_burst()
-    burst = book.sheet("ash", burst_frames)
-    parts = []
-    for enc in script.encounters:
-        cx, cy = _center(enc, arts, book)
-        t0 = enc.death_t + FLASH_HOLD
-        track = smil.DiscreteTrack(0)
-        track.cycle(t0, t0 + 0.5, 10, list(range(len(burst_frames))))
-        anim = smil.translate(_sheet_offsets(track.events(), burst.frame_w), d, calc="discrete")
-        parts.append(
-            f'<g opacity="0" transform="translate({smil.num(cx - burst.frame_w / 2)} {smil.num(cy - 20)})">'
-            f'{smil.windows([(t0, t0 + 0.5)], d)}{_clip(burst, anim)}</g>'
-        )
-        label = book.image(f"gain-{enc.entry.count}", font.render(f"+{enc.entry.count}", font.SOUL))
-        lx, ly = cx - label.width / 2, cy - 30
-        rise = smil.translate([(t0, lx, ly), (t0 + 1.1, lx, ly - 12)], d)
-        parts.append(
-            f'<g opacity="0">{smil.windows([(t0, t0 + 1.1)], d)}'
-            f'<g>{rise}<use href="#{label.id}"/></g></g>'
-        )
-    return "".join(parts)
-
-
-def parry_sparks(script, book):
-    if not script.parries:
-        return ""
-    d = script.duration
-    asset = book.image("spark", effects.spark())
-    x, y = layout.KNIGHT_X + 58, layout.GROUND_Y - 52
-    windows = [(t, t + 0.14) for t in script.parries]
-    return (
-        f'<g opacity="0" transform="translate({x} {y})">{smil.windows(windows, d)}'
-        f'<use href="#{asset.id}"/></g>'
-    )
-
-
-def soul_wisps(script, book):
-    """Each kill releases a wisp that arcs into the SOULS counter."""
-    d = script.duration
-    arts = monsters.roster()
-    asset = book.image("wisp", effects.wisp())
-    tx, ty = layout.SOULS_ANCHOR
-    parts = []
-    for enc in script.encounters:
-        x0, y0 = _center(enc, arts, book)
-        t0, t1 = enc.death_t + 0.12, enc.death_t + WISP_FLIGHT
-        path = f"M{smil.num(x0)} {smil.num(y0)} Q{smil.num((x0 + tx) / 2)} {smil.num(min(y0, ty) - 30)} {tx} {ty}"
-        parts.append(
-            f'<g opacity="0">{smil.windows([(t0, t1)], d)}'
-            f'<g>{smil.motion(path, t0, t1, d)}<use href="#{asset.id}" x="-5" y="-5"/></g></g>'
+            f'<g opacity="0">{smil.windows([(spawn, gone)], d)}<g>{fade}'
+            f'<g>{motion}<g>{knock}{_clip(sheet, frames, aura)}</g></g></g></g>'
         )
     return "".join(parts)

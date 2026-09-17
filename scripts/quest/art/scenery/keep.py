@@ -9,7 +9,7 @@ import math
 import random
 
 from .. import raster
-from . import TITLES, Layer, Light, RegionArt, common, paint
+from . import TITLES, Layer, Light, Motif, RegionArt, common, motifs, paint
 
 C = raster.rgb
 TILE = 830
@@ -209,6 +209,7 @@ def fog():
 
 BRAZIER_POSTS = (2, 10, 18, 26)
 POST_GAP = 28
+BRAZIER_XS = tuple(post * POST_GAP + 3 for post in BRAZIER_POSTS)
 
 
 def bridge():
@@ -285,7 +286,7 @@ def build():
             Layer("sky", sky(), 0, 0.0),
             Layer("city", city(), 60, 0.1, offset=-20),
             Layer("grove", grove(), 118, 0.35),
-            Layer("fog", fog(), 176, 0.25),
+            Layer("fog", fog(), 176, 0.25, effect="sway"),
             Layer("bridge", bridge(), 184, 1.0),
             Layer("front", front(), 226, 1.3, front=True),
         ),
@@ -300,4 +301,11 @@ def build():
         particles=(C("#d04a70"), C("#ff8aa0"), C("#8a1a3a")),
         motion="fall",
         grade=("#2a0a1e", 0.06),
+        motifs=tuple(
+            Motif(f"flame-{i}", motifs.brazier_flames(), x - 6, 159, parallax=1.0, fps=10)
+            for i, x in enumerate(BRAZIER_XS)
+        ) + (
+            Motif("bats", motifs.flock(6, (70, 24), C("#0c0610"), seed="keep-bats"), 436, 64, sky=True, fps=7,
+                  flight=((0, 0, 0), (32, -560, 30), (100, -560, 30)), period=17.0, delay=9.0),
+        ),
     )

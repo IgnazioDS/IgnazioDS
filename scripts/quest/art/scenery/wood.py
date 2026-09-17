@@ -10,7 +10,7 @@ import math
 import random
 
 from .. import raster
-from . import TITLES, Layer, Light, RegionArt, paint
+from . import TITLES, Layer, Light, Motif, RegionArt, motifs, paint
 
 C = raster.rgb
 TILE = 830
@@ -246,8 +246,8 @@ def build():
         layers=(
             Layer("backdrop", backdrop(), 0, 0.0),
             Layer("far", far_trunks(), 0, 0.12),
-            Layer("rays", rays(), 0, 0.05),
-            Layer("mist", mist_band(), 150, 0.22),
+            Layer("rays", rays(), 0, 0.05, effect="shimmer"),
+            Layer("mist", mist_band(), 150, 0.22, effect="sway"),
             Layer("mid", mid_trunks(), 0, 0.4),
             Layer("canopy", canopy(), 0, 0.3),
             Layer("ruins", ruins(), 180, 1.0),
@@ -264,4 +264,9 @@ def build():
         ),
         particles=(C("#e8ffb0"), C("#b8f0d0"), C("#ffffff")),
         motion="rise",
+        motifs=(
+            Motif("eyes", motifs.watching_eyes(), 236, 142, parallax=0.4, fps=2.5),
+            Motif("eyes-far", motifs.watching_eyes(frames=13, color=C("#e8ff6a"), core=C("#fbffd0")), 604, 118,
+                  parallax=0.12, fps=3.0),
+        ),
     )

@@ -5,10 +5,11 @@ Usage:
   GITHUB_TOKEN=... python scripts/generate_quest.py --user IgnazioDS --output quest.svg
   python scripts/generate_quest.py --input contribs.json --output quest.svg --date 2026-09-16
 
-A dark knight fights one monster per active day (the last 24 days with at
-least one contribution); tougher monsters mean busier days, the biggest day
-is the dragon, and the SOULS counter ends at the real contribution total.
-The quest is seeded by the date, so every day plays differently.
+A dark knight fights one foe per active day (the last 24 days with at least
+one contribution): busier days are tougher foes, each region gives them its
+own shape, every chapter's busiest day is an elite, and the biggest day is
+the dragon. The SOULS counter and the contribution strip end at the real
+totals. The quest is seeded by the date, so every day plays differently.
 """
 
 import argparse

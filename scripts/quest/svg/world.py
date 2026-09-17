@@ -1,13 +1,15 @@
-"""The world layer: per-chapter parallax scenery, glow lights, ambient motes,
+"""The world layer: per-scene parallax scenery, glow lights, ambient motes,
 foreground framing and bonfires.
 
-Each chapter is split into a back group (sky, distant and ground layers,
-back lights, motes) drawn behind the actors and a front group (foreground
-layers, front lights, color grade) drawn over them.
+A scene is the prologue vista or a chapter's region. Each is split into a back
+group (sky, sky actors, distant and ground layers, back lights, motes) drawn
+behind the actors and a front group (foreground layers, front lights, color
+grade) drawn over them.
 """
 
 import math
 import random
+from dataclasses import dataclass
 
 from .. import layout
 from ..art import effects, scenery
@@ -17,26 +19,42 @@ from . import smil
 FLICKER_CLASS = {"fire": "lf-fire", "pulse": "lf-pulse", "lightning": "lf-bolt"}
 
 
+@dataclass(frozen=True)
+class Scene:
+    region: str
+    start: float
+    end: float
+
+
+def scenes(script):
+    """The prologue vista, then every chapter, in play order."""
+    vista = Scene("overlook", 0.0, script.prologue.end)
+    return (vista,) + tuple(Scene(c.region, c.start, c.end) for c in script.chapters)
+
+
 def _hex(color):
     return f"#{color >> 8:06x}"
 
 
-def _scroll_samples(script, chapter):
-    start = scroll_at(script.scroll, chapter.start)
-    inside = [(t, s) for t, s in script.scroll if chapter.start < t < chapter.end]
-    samples = [(chapter.start, start)] + inside + [(chapter.end, scroll_at(script.scroll, chapter.end))]
+def _scroll_samples(script, scene):
+    start = scroll_at(script.scroll, scene.start)
+    inside = [(t, s) for t, s in script.scroll if scene.start < t < scene.end]
+    samples = [(scene.start, start)] + inside + [(scene.end, scroll_at(script.scroll, scene.end))]
     return start, samples
 
 
-def _layer(script, chapter, layer, asset):
-    start, samples = _scroll_samples(script, chapter)
+def _layer(script, scene, layer, asset):
+    start, samples = _scroll_samples(script, scene)
+    effect = f' class="{layer.effect}"' if layer.effect else ""
     if layer.parallax == 0:
-        return f'<use href="#{asset.id}" y="{layer.y}"{_opacity(layer.opacity)}/>'
+        return f'<g{effect}><use href="#{asset.id}" y="{layer.y}"{_opacity(layer.opacity)}/></g>'
     points = [(t, layer.offset - (s - start) * layer.parallax, layer.y) for t, s in samples]
     travel = max(abs(x) for _, x, _ in points)
     copies = math.ceil((travel + layout.WIDTH) / asset.width) + 1
     first = -asset.width if layer.offset > 0 else 0
     uses = "".join(f'<use href="#{asset.id}" x="{first + k * asset.width}"/>' for k in range(copies + 1))
+    if effect:
+        uses = f"<g{effect}>{uses}</g>"
     return (
         f'<g transform="translate({layer.offset} {layer.y})"{_opacity(layer.opacity)}>'
         f"{smil.translate(points, script.duration)}{uses}</g>"
@@ -48,7 +66,7 @@ def _opacity(value):
 
 
 def light_repeats(light, art, travel):
-    """x offsets that repeat a scrolling light at its layer's tile width across `travel` px."""
+    """x offsets that repeat a scrolling light (or motif) at its layer's tile width across `travel` px."""
     if light.parallax == 0:
         return (0,)
     tiles = [layer.image.width for layer in art.layers if layer.parallax == light.parallax]
@@ -58,10 +76,10 @@ def light_repeats(light, art, travel):
     return tuple(k * period for k in range(math.ceil(travel / period) + 1))
 
 
-def _lights(script, chapter, art, lights, gradients):
+def _lights(script, scene, art, lights, gradients):
     if not lights:
         return ""
-    start, samples = _scroll_samples(script, chapter)
+    start, samples = _scroll_samples(script, scene)
     scroll_span = samples[-1][1] - start
     parts = []
     for light in lights:
@@ -79,6 +97,57 @@ def _lights(script, chapter, art, lights, gradients):
             ellipse = f"<g>{smil.translate(points, script.duration)}{ellipse}</g>"
         parts.append(ellipse)
     return f'<g style="mix-blend-mode:screen">{"".join(parts)}</g>'
+
+
+def _stepper(sheet, count, fps, styles):
+    """CSS class that steps a sprite sheet through `count` frames (none for stills)."""
+    if count < 2:
+        return ""
+    name = f"st{count}w{sheet.frame_w}f{round(fps * 10)}"
+    styles[name] = (f".{name}{{animation:{name} {count / fps:.2f}s steps({count}) infinite}}"
+                    f"@keyframes {name}{{to{{transform:translateX(-{count * sheet.frame_w}px)}}}}")
+    return name
+
+
+def _flight(key, motif, styles):
+    if not motif.flight:
+        return ""
+    name = f"fl-{key}-{motif.name}"
+    stops = "".join(f"{pct}%{{transform:translate({dx}px,{dy}px);opacity:1}}" for pct, dx, dy in motif.flight)
+    delay = f";animation-delay:-{motif.delay:.2f}s" if motif.delay else ""
+    styles[name] = f".{name}{{animation:{name} {motif.period:.2f}s linear infinite{delay}}}@keyframes {name}{{{stops}}}"
+    return name
+
+
+def _motif(script, scene, art, motif, book, styles):
+    sheet = book.sheet(f"{art.key}-{motif.name}", motif.frames)
+    step = _stepper(sheet, len(motif.frames), motif.fps, styles)
+    cols, rows = motif.tile
+    sprite = "".join(
+        f'<svg x="{c * sheet.frame_w}" y="{r * sheet.height}" width="{sheet.frame_w}" height="{sheet.height}">'
+        f'<use href="#{sheet.id}"{f" class={chr(34)}{step}{chr(34)}" if step else ""}/></svg>'
+        for r in range(rows) for c in range(cols)
+    )
+    flight = _flight(art.key, motif, styles)
+    if flight:  # hidden unless the flight's CSS animation runs (its keyframes restore the opacity)
+        sprite = f'<g opacity="0" class="{flight}">{sprite}</g>'
+    if motif.effect == "bolt":
+        sprite = f'<g opacity="0" class="{FLICKER_CLASS["lightning"]}">{sprite}</g>'
+    start, samples = _scroll_samples(script, scene)
+    span = samples[-1][1] - start
+    copies = "".join(
+        f'<g transform="translate({smil.num(motif.x + offset)} {smil.num(motif.y)})">{sprite}</g>'
+        for offset in light_repeats(motif, art, span * motif.parallax)
+    )
+    if motif.parallax:
+        points = [(t, -(s - start) * motif.parallax, 0) for t, s in samples]
+        copies = f"<g>{smil.translate(points, script.duration)}{copies}</g>"
+    return copies
+
+
+def _motifs(script, scene, art, book, styles, where):
+    chosen = [m for m in art.motifs if where(m)]
+    return "".join(_motif(script, scene, art, m, book, styles) for m in chosen)
 
 
 def _particles(art, seed):
@@ -99,28 +168,37 @@ def _particles(art, seed):
     return "".join(parts)
 
 
-def _visibility(script, chapter, index):
-    if chapter.start <= 0 and chapter.end >= script.duration:
+def _visibility(script, scene, index):
+    if scene.start <= 0 and scene.end >= script.duration:
         return "", "1"
-    return smil.windows([(chapter.start, chapter.end)], script.duration), "1" if index == 0 else "0"
+    return smil.windows([(scene.start, scene.end)], script.duration), "1" if index == 0 else "0"
 
 
-def chapters(script, book, gradients):
-    """(back, front) SVG fragments for every chapter's scenery."""
+def scene_layers(script, book, gradients, styles, sky=None):
+    """(back, front) SVG fragments for every scene; `sky` maps a scene index to sky actors.
+
+    `styles` collects the CSS rules the scenes' motifs need (name -> rule).
+    """
+    sky = sky or {}
     back_groups, front_groups = [], []
-    for index, chapter in enumerate(script.chapters):
-        art = scenery.region(chapter.region)
+    for index, scene in enumerate(scenes(script)):
+        art = scenery.region(scene.region)
         back, front = [], []
-        for layer in art.layers:
-            asset = book.image(f"{art.key}-{layer.name}", layer.image)
-            (front if layer.front else back).append(_layer(script, chapter, layer, asset))
-        back.append(_lights(script, chapter, art, [l for l in art.lights if not l.front], gradients))
+        for i, layer in enumerate(art.layers):
+            if i == art.sky_layers:
+                back.append(sky.get(index, ""))
+                back.append(_motifs(script, scene, art, book, styles, lambda m: m.sky))
+            asset = book.image(f"{layer.source or art.key}-{layer.name}", layer.image)
+            (front if layer.front else back).append(_layer(script, scene, layer, asset))
+        back.append(_motifs(script, scene, art, book, styles, lambda m: not m.sky and not m.front))
+        back.append(_lights(script, scene, art, [l for l in art.lights if not l.front], gradients))
         back.append(_particles(art, index))
-        front.append(_lights(script, chapter, art, [l for l in art.lights if l.front], gradients))
+        front.append(_motifs(script, scene, art, book, styles, lambda m: m.front))
+        front.append(_lights(script, scene, art, [l for l in art.lights if l.front], gradients))
         if art.grade:
             color, alpha = art.grade
             front.append(f'<rect width="{layout.WIDTH}" height="{layout.HEIGHT}" fill="{color}" opacity="{smil.num(alpha)}"/>')
-        visibility, base = _visibility(script, chapter, index)
+        visibility, base = _visibility(script, scene, index)
         back_groups.append(f'<g opacity="{base}">{visibility}{"".join(back)}</g>')
         front_groups.append(f'<g opacity="{base}">{visibility}{"".join(front)}</g>')
     return "".join(back_groups), "".join(front_groups)
@@ -136,20 +214,20 @@ def gradient_defs(gradients):
 
 
 def bonfires(script, book, gradients):
-    if not script.rests:
-        return ""
+    """The prologue's fire, every rest along the way, and the fire lit when the wyrm falls."""
     d = script.duration
     frames = effects.bonfire()
     sheet = book.sheet("bonfire", frames)
     glow = gradients.setdefault("#ff9a3c", f"lg{len(gradients)}")
+    paths = [script.prologue.camp, *(rest.path for rest in script.rests), script.epilogue.camp]
     parts = []
-    for rest in script.rests:
-        start, end = rest.path[0][0], rest.path[-1][0]
+    for path in paths:
+        start, end = path[0][0], path[-1][0]
         y = layout.GROUND_Y - (sheet.height - 3)
         track = smil.DiscreteTrack(0)
         track.cycle(start, end, 8, list(range(len(frames))))
         flames = smil.translate([(t, -i * sheet.frame_w, 0) for t, i in track.events()], d, calc="discrete")
-        motion = smil.translate([(t, x, y) for t, x in rest.path], d)
+        motion = smil.translate([(t, x, y) for t, x in path], d)
         parts.append(
             f'<g opacity="0">{smil.windows([(start, end)], d)}<g>{motion}'
             f'<g class="lf-fire" style="mix-blend-mode:screen">'
@@ -174,4 +252,8 @@ def css():
         "@keyframes lfire{0%{opacity:.8}33%{opacity:1}66%{opacity:.65}}"
         "@keyframes lpulse{0%,100%{opacity:.55}50%{opacity:1}}"
         "@keyframes lbolt{0%,88%,92%,95%,100%{opacity:0}89%,93%{opacity:1}}"
+        ".shimmer{animation:shimmer 6.5s ease-in-out infinite}"
+        ".sway{animation:sway 11s ease-in-out infinite alternate}"
+        "@keyframes shimmer{0%,100%{opacity:.55}50%{opacity:1}}"
+        "@keyframes sway{from{transform:translateX(0)}to{transform:translateX(-16px)}}"
     )

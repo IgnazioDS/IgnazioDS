@@ -7,29 +7,31 @@ so enemies always arrive exactly on cue whatever happened before.
 Same roster + same seed => identical script.
 """
 
+import dataclasses
+import math
 import random
 
-from . import layout
-from .script import BossFight, Chapter, Encounter, Phase, QuestScript, Rest
+from . import bestiary, layout
+from .combat import Combat
+from .script import Chapter, Encounter, Epilogue, Phase, Prologue, QuestScript, Rest
+from .wyrm import WyrmFight
 
 WALK_SPEED = 74.0
-MONSTER_SPEED = {1: 95.0, 2: 58.0, 3: 50.0, 4: 66.0}  # charging, px/s over the ground
 WALK_FPS, IDLE_FPS, REST_FPS = 12.0, 4.0, 2.0
-# anticipation, peak, smear (the hit lands here), impact, follow-through, recover
-STRIKE_TIMING = (0.08, 0.1, 0.06, 0.08, 0.08, 0.08)
-HIT_FRAME = 2
 HITS_BY_TIER = {1: 1, 2: 2, 3: 2, 4: 3}
+ELITE_EXTRA_HITS = 1
+REMAINS_TIME, REMAINS_EXIT_X = 3.2, -110.0   # how long bodies linger; where they leave the screen
+CAMP_EXIT_X = -40.0                          # a bonfire is gone once it scrolls past here
 REST_GAP, MAX_RESTS, SIT_TIME = 5, 2, 1.7
-WISP_FLIGHT, BOSS_WISP_FLIGHT = 0.8, 1.3
-FADE, INTRO_FADE, OUTRO_FADE = 0.45, 0.8, 0.9
+WISP_FLIGHT = 0.8
+FADE, INTRO_FADE, OUTRO_FADE = 0.45, 1.0, 0.9
 MIN_HEALTH = 0.2
-GAME_TITLE_HOLD = 2.6  # chapter I's card waits for the opening title card
+# prologue: seated by the fire while the title plays and the wyrm flies over
+PROLOGUE_SIT, PROLOGUE_TITLE, FLYBY = 4.6, 1.0, (0.5, 4.2)
+RISE, RISE_TIME = (("kneel1", 0.0), ("kneel0", 0.22), ("idle0", 0.44)), 0.6
+# epilogue: the fire takes, then the quest's tally
+STATS_DELAY, STATS_TIME = 0.35, 4.6
 REGIONS = ("violet", "wood", "crimson")
-BOSS_PATTERNS = (
-    ("breath", "strike", "strike", "breath", "strike", "strike"),
-    ("strike", "breath", "strike", "strike", "breath", "strike"),
-    ("breath", "strike", "breath", "strike", "strike", "strike"),
-)
 
 
 def simulate(roster, seed):
@@ -75,8 +77,10 @@ def chapter_sizes(count, chapters=4):
     return [base + (1 if i < extra else 0) for i in range(chapters)]
 
 
-class _Builder:
+class _Builder(WyrmFight, Combat):
     """Mutable working state for one quest; emits immutable records."""
+
+    min_health = MIN_HEALTH
 
     def __init__(self, roster, seed):
         self.rng = random.Random(seed)
@@ -91,7 +95,8 @@ class _Builder:
         self.souls, self.banked = [(0.0, 0)], 0
         self.hp, self.health = 1.0, [(0.0, 1.0)]
         self.fades = [(0.0, 1.0), (INTRO_FADE, 0.0)]
-        self.parries = []
+        self.moves = [(0.0, 0.0, 0.0)]
+        self.shakes = []
         self.barrier = 0.0
 
     # -- timeline primitives ---------------------------------------------------
@@ -117,6 +122,13 @@ class _Builder:
         self.phases.append(Phase(kind, start, end))
         self.t = end
 
+    def _cycle(self, names, fps, duration):
+        """Alternate `names` at `fps` for `duration` seconds from now."""
+        start = self.t
+        for k in range(max(1, math.ceil(duration * fps - 1e-9))):
+            self._frame(start + k / fps, names[k % len(names)])
+        self.t = start + duration
+
     def hold(self, duration):
         """Stand still (idle breathing); records no phase of its own."""
         end, t, i = self.t + duration, self.t, 0
@@ -124,27 +136,6 @@ class _Builder:
             self._frame(t, f"idle{i % layout.IDLE_FRAMES}")
             t, i = t + 1 / IDLE_FPS, i + 1
         self.t = end
-
-    def strike(self):
-        """Six-frame overhead slash; returns the instant the blade connects."""
-        t, hit = self.t, None
-        for index, hold in enumerate(STRIKE_TIMING):
-            self._frame(t, f"atk{index}")
-            if index == HIT_FRAME:
-                hit = t
-            t += hold
-        self._frame(t, "idle0")
-        self.t = t
-        return hit
-
-    def hurt(self, damage):
-        before = self.hp
-        self.hp = max(MIN_HEALTH, self.hp - damage)
-        self._frame(self.t, "hurt1")
-        self._frame(self.t + 0.06, "hurt0")
-        self.health += [(self.t, before), (self.t + 0.08, self.hp)]
-        self.t += 0.28
-        self._frame(self.t, "idle0")
 
     def bank(self, t, count):
         self.banked += count
@@ -176,36 +167,24 @@ class _Builder:
         return walk
 
     # -- set pieces ------------------------------------------------------------
-    def encounter(self, index, entry, chapter):
+    def encounter(self, index, entry, chapter, region, elite=False):
         tier = entry.tier
-        speed, engage_x = MONSTER_SPEED[tier], layout.engage_x(tier)
+        kind = bestiary.kind_for(region, tier)
+        speed, engage_x = kind.speed, kind.engage_x
         base = 0.45 + 0.08 * min(entry.gap_before, 5) + self.rng.uniform(0.0, 0.25)
         self.walk(self._walk_until_clear_spawn(base, engage_x, speed))
         engage_t = self.t
         path = solve_approach(self.scroll, engage_t, engage_x, speed)
         self.barrier = max(self.barrier, engage_t)  # the next foe waits for this duel
         self.hold(0.1)
-        attack_t, knight_hurt = None, False
-        if tier >= 3:
-            attack_t = self.t
-            knight_hurt = tier == 4 or self.rng.random() < 0.3
-            self.hold(0.18)
-            if knight_hurt:
-                self.hurt(0.12 if tier == 4 else 0.08)
-            else:
-                self._frame(self.t, "parry0")
-                self._frame(self.t + 0.1, "parry1")
-                self.parries.append(self.t + 0.1)
-                self.t += 0.26
-                self._frame(self.t, "idle0")
-        strikes = HITS_BY_TIER[tier]
-        if strikes > 1 and self.rng.random() < 0.25:
+        strikes = HITS_BY_TIER[tier] + (ELITE_EXTRA_HITS if elite else 0)
+        if strikes > 1 and not elite and self.rng.random() < 0.25:
             strikes -= 1  # a critical blow ends it early
-        hits = tuple(self.strike() for _ in range(strikes))
+        attacks, hits, blows, heavy = self.duel(tier, elite, strikes)
         self.bank(hits[-1] + WISP_FLIGHT, entry.count)
         self.phases.append(Phase("fight", engage_t, self.t))
         self.encounters.append(
-            Encounter(index, entry, chapter, path, engage_t, attack_t, knight_hurt, hits, hits[-1])
+            Encounter(index, entry, chapter, kind.key, elite, path, engage_t, attacks, hits, blows, heavy, hits[-1])
         )
 
     def rest(self, chapter):
@@ -234,31 +213,27 @@ class _Builder:
         self.barrier = switch
         self.walk(FADE, kind="transition")
 
-    def boss_fight(self):
-        self.walk(1.0)
-        enter_t = self.t
-        land_t = enter_t + 1.6
-        self.hold(land_t + 0.7 - self.t)
-        breaths, hits = [], []
-        for step in self.rng.choice(BOSS_PATTERNS):
-            if step == "breath":
-                start = self.t + 0.25
-                self.hold(0.5)
-                self.hurt(0.22)
-                self.hold(start + 1.1 - self.t + 0.2)
-                breaths.append((start, start + 1.1))
-            else:
-                hits.append(self.strike())
-                self.hold(0.1)
-        death_t = hits[-1]
-        self.hold(0.8)
-        for k in range(int((death_t + 4.1 - self.t) * REST_FPS)):
-            self._frame(self.t + k / REST_FPS, f"kneel{k % 2}")
-        self.bank(death_t + BOSS_WISP_FLIGHT, self.roster.boss.count)
-        banner_t = death_t + 1.2
-        self.t = banner_t + 2.9
-        self.phases.append(Phase("boss", enter_t, self.t))
-        return BossFight(self.roster.boss, enter_t, land_t, tuple(breaths), tuple(hits), death_t, banner_t)
+    def prologue(self):
+        """Seated by the fire while the title plays and the wyrm flies over, then up."""
+        self._cycle(("sit0", "sit1"), REST_FPS, PROLOGUE_SIT)
+        rise_t = self.t
+        for name, delay in RISE:
+            self._frame(rise_t + delay, name)
+        self.t = rise_t + RISE_TIME
+        self.phases.append(Phase("prologue", 0.0, self.t))
+        return rise_t, self.t
+
+    def epilogue(self):
+        """The fire takes; he sits while the quest's tally plays, then the loop fades out."""
+        camp_t = self.t
+        self.health += [(camp_t + 0.3, self.hp), (camp_t + 1.4, 1.0)]  # every bonfire mends
+        self.hp = 1.0
+        stats_t = camp_t + STATS_DELAY
+        end = stats_t + STATS_TIME
+        self._cycle(("sit0", "sit1"), REST_FPS, end + OUTRO_FADE - camp_t)
+        self.fades += [(end, 0.0), (end + OUTRO_FADE, 1.0)]
+        self.phases.append(Phase("epilogue", camp_t, self.t))
+        return camp_t, stats_t, end
 
     # -- orchestration -----------------------------------------------------------
     def _rest_before(self):
@@ -274,25 +249,21 @@ class _Builder:
         sizes = chapter_sizes(len(self.roster.entries))
         plan = [(order[i], sizes[i]) for i in range(3) if sizes[i]] + [("keep", sizes[3])]
         rest_before = self._rest_before()
+        prologue_marks = self.prologue()
         index = 0
         for chapter, (region, size) in enumerate(plan):
-            if chapter == 0:
-                self.chapters.append({"region": region, "start": 0.0, "title_t": GAME_TITLE_HOLD})
-                self.walk(1.2, kind="intro")
-            else:
-                self.transition(region)
-            for _ in range(size):
+            self.transition(region)
+            champion = bestiary.elite_index(self.roster.entries[index:index + size])
+            for k in range(size):
                 if index in rest_before:
                     self.rest(chapter)
-                self.encounter(index, self.roster.entries[index], chapter)
+                self.encounter(index, self.roster.entries[index], chapter, region, elite=k == champion)
                 index += 1
-        boss = self.boss_fight()
-        self.fades += [(self.t, 0.0), (self.t + OUTRO_FADE, 1.0)]
-        self.phases.append(Phase("outro", self.t, self.t + OUTRO_FADE))
-        self.t += OUTRO_FADE
-        return self._freeze(boss)
+        boss, cheer_t = self.boss_fight()
+        epilogue_marks = (cheer_t, *self.epilogue())
+        return self._freeze(boss, prologue_marks, epilogue_marks)
 
-    def _freeze(self, boss):
+    def _freeze(self, boss, prologue_marks, epilogue_marks):
         duration = self.t
         self.scroll.append((duration, self.world))
         self.health.append((duration, self.hp))
@@ -302,34 +273,69 @@ class _Builder:
                     c["title_t"])
             for i, c in enumerate(self.chapters)
         )
-        rests = tuple(self._rest_record(mark, duration) for mark in self.rest_marks)
+        rests = tuple(self._rest_record(mark, chapters) for mark in self.rest_marks)
+        encounters = tuple(self._with_remains(enc, chapters) for enc in self.encounters)
+        fire = float(layout.BONFIRE_X)
+        rise_t, depart_t = prologue_marks
+        prologue = Prologue(PROLOGUE_TITLE, FLYBY, rise_t, depart_t, chapters[0].start,
+                            self._camp_path(((0.0, fire), (depart_t, fire)), depart_t, chapters[0].start))
+        cheer_t, camp_t, stats_t, fade_t = epilogue_marks
+        epilogue = Epilogue(cheer_t, camp_t, stats_t, fade_t, ((camp_t, fire), (duration, fire)))
         return QuestScript(
             duration=duration,
             scroll=tuple(self.scroll),
             knight_frames=tuple(self.frames),
             phases=tuple(self.phases),
             chapters=chapters,
-            encounters=tuple(self.encounters),
+            encounters=encounters,
             rests=rests,
             boss=boss,
             souls=tuple(self.souls),
             health=tuple(self.health),
             fades=tuple(self.fades),
-            parries=tuple(self.parries),
+            knight_moves=tuple(self.moves),
+            shakes=tuple(self.shakes),
+            prologue=prologue,
+            epilogue=epilogue,
         )
 
-    def _rest_record(self, mark, duration):
+    def _rest_record(self, mark, chapters):
         spawn_t, sit_start, sit_end, chapter = mark
-        path = [(spawn_t, float(layout.SPAWN_X)), (sit_start, float(layout.BONFIRE_X))]
-        anchor = scroll_at(self.scroll, sit_end)
+        head = ((spawn_t, float(layout.SPAWN_X)), (sit_start, float(layout.BONFIRE_X)))
+        return Rest(self._camp_path(head, sit_end, chapters[chapter].end), sit_start, sit_end, chapter)
+
+    def _with_remains(self, enc, chapters):
+        """The body stays where it fell and scrolls away once the knight walks on."""
+        head = ((enc.death_t, float(bestiary.KINDS[enc.kind].engage_x)),)
+        until = min(enc.death_t + REMAINS_TIME, chapters[enc.chapter].end)
+        return dataclasses.replace(enc, remains=self._carried(head, enc.death_t, until, REMAINS_EXIT_X))
+
+    def _camp_path(self, head, leave_t, until):
+        """A bonfire's screen path: the `head` keyframes, then carried off by the scroll."""
+        return self._carried(head, leave_t, until, CAMP_EXIT_X)
+
+    def _carried(self, head, leave_t, until, exit_x):
+        """Screen path of something left on the ground: `head` keyframes, then carried off by the scroll.
+
+        It rests at the last head keyframe's x until the knight walks on after
+        `leave_t`, and the path ends where it leaves the screen (`exit_x`) or at `until`.
+        """
+        path = list(head)
+        rest_x, anchor = path[-1][1], scroll_at(self.scroll, leave_t)
         for t, s in self.scroll:
-            if t <= sit_end:
+            if t <= leave_t:
                 continue
-            x = layout.BONFIRE_X - (s - anchor)
-            if x < -40:
+            final = t >= until
+            if final:
+                t, s = until, scroll_at(self.scroll, until)
+            x = rest_x - (s - anchor)
+            if x < exit_x:
                 prev_t, prev_x = path[-1]
-                exit_t = prev_t + (t - prev_t) * (prev_x + 40) / (prev_x - x)
-                path.append((exit_t, -40.0))
-                break
+                path.append((prev_t + (t - prev_t) * (prev_x - exit_x) / (prev_x - x), exit_x))
+                return tuple(path)
             path.append((t, x))
-        return Rest(tuple(path), sit_start, sit_end, chapter)
+            if final:
+                break
+        if path[-1][0] < until:
+            path.append((until, path[-1][1]))
+        return tuple(path)

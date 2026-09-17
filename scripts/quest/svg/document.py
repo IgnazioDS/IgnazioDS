@@ -1,7 +1,7 @@
 """Assemble the full quest SVG document."""
 
 from .. import layout
-from . import actors, boss, hud, world
+from . import actors, boss, cards, cinema, fx, hud, world
 from .assets import AssetBook
 
 PIXELATED = (
@@ -14,36 +14,59 @@ PIXELATED = (
 def render(script, roster):
     """QuestScript + Roster -> self-contained, infinitely looping SVG string."""
     book = AssetBook()
-    gradients = {}
-    scenery_back, scenery_front = world.chapters(script, book, gradients)
-    world_layers = "".join([
-        scenery_back,
+    gradients, styles = {}, {}
+    world_layers = _world(script, book, gradients, styles)
+    overlay = _overlay(script, roster, book)
+    return _frame(script, book, gradients, styles, world_layers, overlay)
+
+
+def _world(script, book, gradients, styles):
+    """Everything that shakes with the ground: scenery, fires, the wyrm, monsters, the knight, blows."""
+    back, front = world.scene_layers(script, book, gradients, styles, sky={0: cinema.flyby(script, book)})
+    return "".join([
+        back,
         world.bonfires(script, book, gradients),
+        cinema.ignition(script, book, gradients),
         boss.wyrm(script, book),
         actors.monster_actors(script, book),
-        actors.knight_actor(script, book, boss.knight_dash(script)),
-        actors.parry_sparks(script, book),
-        actors.death_effects(script, book),
+        actors.knight_actor(script, book),
+        boss.marks(script, book),
+        fx.hit_marks(script, book),
+        fx.parry_sparks(script, book),
+        fx.death_effects(script, book),
         boss.fire(script, book, gradients),
         boss.embers(script, book),
-        scenery_front,
+        front,
     ])
-    overlay = "".join([
-        actors.soul_wisps(script, book),
-        boss.soul(script, book),
-        hud.fade_overlay(script),
-        hud.boss_intro(script, book),
-        hud.health_bar(script),
+
+
+def _overlay(script, roster, book):
+    """Everything that stays still over the world: souls in flight, fades, the HUD and the cards."""
+    hud_layer = "".join([
+        hud.health_bar(script, book),
         hud.souls_counter(script, roster, book),
-        hud.date_labels(script, book),
+        hud.quest_strip(script, roster, book),
+    ])
+    return "".join([
+        fx.soul_wisps(script, book),
+        boss.soul(script, book),
+        boss.flash(script),
+        hud.fade_overlay(script),
+        cards.boss_intro(script, book),
+        f'<g opacity="0">{hud.visibility(script)}{hud_layer}</g>',
+        hud.nameplates(script, book),
         hud.boss_bar(script, book),
-        hud.game_title(script, book),
-        hud.chapter_titles(script, book),
-        hud.victory_banner(script, book),
+        cards.game_title(script, roster, book),
+        cards.chapter_titles(script, book),
+        cards.victory_banner(script, book),
+        cards.quest_complete(script, roster, book),
         hud.footer(book),
     ])
+
+
+def _frame(script, book, gradients, styles, world_layers, overlay):
     w, h, s = layout.WIDTH, layout.HEIGHT, layout.SCALE
-    style = f"<style>svg,image,use{{{PIXELATED}}}{world.css()}</style>"
+    style = f"<style>svg,image,use{{{PIXELATED}}}{world.css()}{''.join(styles[name] for name in sorted(styles))}</style>"
     defs = book.defs().replace(
         "<defs>",
         f'<defs>{world.gradient_defs(gradients)}<clipPath id="frame"><rect width="{w}" height="{h}" rx="6"/></clipPath>',

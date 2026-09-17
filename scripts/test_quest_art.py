@@ -183,6 +183,41 @@ class SpriteHelpers(unittest.TestCase):
         self.assertEqual(padded.pixels, (raster.CLEAR,) * 5 + (white,))
 
 
+class RigTransforms(unittest.TestCase):
+    def setUp(self):
+        from quest.art import rig
+        self.rig = rig
+        self.mat = rig.Material(rig.ramp("#000000", "#ffffff"))
+
+    def test_scale_and_offset_move_points_and_radii(self):
+        rig = self.rig
+        parts = [rig.Part(rig.Capsule((2, 4), (6, 4), 2.0, 1.0), self.mat)]
+        (moved,), marks = rig.transform(parts, [(2, 4, 7)], scale=0.5, offset=(10, 20))
+        self.assertEqual((moved.shape.a, moved.shape.b), ((11.0, 22.0), (13.0, 22.0)))
+        self.assertEqual((moved.shape.r0, moved.shape.r1), (1.0, 0.5))
+        self.assertEqual(marks, [(11, 22, 7)])
+
+    def test_mirror_flips_geometry_but_keeps_the_light(self):
+        rig = self.rig
+        part = rig.Part(rig.Ellipse((6, 8), 5, 3, 0.4), self.mat)
+        (flipped,), _ = rig.transform([part], mirror=20)
+        self.assertEqual(flipped.shape.c, (14.0, 8.0))
+        self.assertAlmostEqual(flipped.shape.angle, -0.4)
+        original = rig.render([part], 20, 16)
+        mirrored = rig.render([flipped], 20, 16)
+        mask = lambda img: [[raster.alpha_of(img.at(x, y)) > 0 for x in range(20)] for y in range(16)]
+        self.assertEqual(mask(mirrored), [row[::-1] for row in mask(original)])
+        self.assertNotEqual(mirrored.pixels, tuple(p for row in range(16) for p in reversed(original.pixels[row * 20:(row + 1) * 20])))
+
+    def test_rotation_turns_about_the_pivot(self):
+        rig = self.rig
+        parts = [rig.Part(rig.Poly(((10, 0), (12, 0), (12, 2))), self.mat)]
+        (turned,), _ = rig.transform(parts, rotate=90, pivot=(10, 0))
+        for got, want in zip(turned.shape.points, ((10, 0), (10, 2), (8, 2))):
+            self.assertAlmostEqual(got[0], want[0])
+            self.assertAlmostEqual(got[1], want[1])
+
+
 class ArtContracts(unittest.TestCase):
     """The renderer relies on these shapes; broken art should fail here, not in CI's SVG."""
 
@@ -196,21 +231,84 @@ class ArtContracts(unittest.TestCase):
         width, height = sizes.pop()
         self.assertGreater(height, layout.KNIGHT_FEET)
 
-    def test_monsters_cover_all_tiers_with_consistent_frames(self):
+    def test_every_monster_kind_has_a_complete_uniform_sheet(self):
+        from quest import bestiary
         from quest.art import monsters
-        arts = monsters.roster()
-        self.assertEqual(sorted(arts), [1, 2, 3, 4])
-        for art in arts.values():
-            frames = (*art.move, *art.attack, art.hurt)
-            self.assertEqual(len(art.attack), 2)
-            self.assertEqual(len({(f.width, f.height) for f in frames}), 1, art.name)
-            self.assertLess(art.feet_y, frames[0].height)
+        self.assertEqual(set(monsters.KINDS), set(bestiary.KINDS))
+        for kind in monsters.KINDS:
+            art = monsters.art(kind)
+            self.assertEqual(art.name, kind)
+            self.assertGreaterEqual(len(art.move), 4, kind)
+            self.assertGreaterEqual(len(art.idle), 2, kind)
+            self.assertEqual(len(art.attack), 2, kind)
+            self.assertGreaterEqual(len(art.death), 3, kind)
+            self.assertEqual(len({(f.width, f.height) for f in art.frames}), 1, kind)
+            self.assertLess(art.feet_y, art.frames[0].height, kind)
+
+    def test_remains_lie_on_the_ground_line(self):
+        from quest.art import monsters
+        for kind in monsters.KINDS:
+            art = monsters.art(kind)
+            remains = art.death[-1]
+            rows = [y for y in range(remains.height)
+                    if any(raster.alpha_of(remains.at(x, y)) for x in range(remains.width))]
+            self.assertTrue(rows, kind)
+            self.assertLessEqual(abs(rows[-1] - art.feet_y), 4, f"{kind} remains float or sink")
+
+    def test_sheet_indices_follow_the_documented_order(self):
+        from quest.art import monsters
+        art = monsters.art("wolf")
+        self.assertIs(art.frames[art.index("idle", 1)], art.idle[1])
+        self.assertIs(art.frames[art.index("windup")], art.attack[0])
+        self.assertIs(art.frames[art.index("strike")], art.attack[1])
+        self.assertIs(art.frames[art.index("hurt")], art.hurt)
+        self.assertIs(art.frames[art.index("death", 2)], art.death[2])
+
+    def test_unknown_monster_kind_fails_loudly(self):
+        from quest.art import monsters
+        with self.assertRaises(ValueError):
+            monsters.art("kraken")
+
+    def test_aura_hugs_the_silhouette_without_covering_it(self):
+        white, red, dim = raster.rgb("#ffffff"), raster.rgba("#ff0000", 200), raster.rgba("#800000", 90)
+        body = raster.Image(5, 5, tuple(white if (x, y) == (2, 2) else raster.CLEAR for y in range(5) for x in range(5)))
+        glow = sprite.aura(body, red, dim)
+        self.assertEqual(glow.at(2, 2), raster.CLEAR)
+        for x, y in ((1, 2), (3, 2), (2, 1), (2, 3)):
+            self.assertEqual(glow.at(x, y), red)
+        self.assertEqual(glow.at(0, 2), dim)
 
     def test_dragon_frames_complete(self):
         from quest.art import dragon
         frames = dragon.frames()
         self.assertEqual(set(dragon.FRAME_NAMES), set(frames))
         self.assertEqual(len({(f.width, f.height) for f in frames.values()}), 1)
+
+    def test_distant_wyrm_flies_on_uniform_frames(self):
+        from quest.art import dragon
+        frames = dragon.flyby_frames()
+        self.assertEqual(len(frames), 4)
+        self.assertEqual({(f.width, f.height) for f in frames}, {(dragon.FLYBY_W, dragon.FLYBY_H)})
+        for frame in frames:
+            rows = [y for y in range(frame.height) if any(raster.alpha_of(frame.at(x, y)) for x in range(frame.width))]
+            self.assertGreater(rows[0], 0, "wing tips clipped at the top edge")
+            self.assertLess(rows[-1], frame.height - 1, "tail clipped at the bottom edge")
+
+    def test_prologue_vista_borrows_the_keep_backdrop(self):
+        from quest import layout
+        from quest.art import png
+        from quest.art.scenery import region
+        vista, keep = region("overlook"), region("keep")
+        keep_images = {layer.name: layer.image for layer in keep.layers}
+        own_bytes = 0
+        for layer in vista.layers:
+            if layer.source == "keep":
+                self.assertIs(layer.image, keep_images[layer.name])
+            else:
+                own_bytes += len(png.encode(layer.image))
+                if layer.parallax > 0:
+                    self.assertGreaterEqual(layer.image.width, layout.WIDTH, layer.name)
+        self.assertLess(own_bytes / 1024, 12)
 
     def test_regions_honour_the_layer_contract(self):
         from quest import layout
@@ -228,6 +326,58 @@ class ArtContracts(unittest.TestCase):
             budget = sum(len(png.encode(layer.image)) for layer in art.layers) / 1024
             self.assertLess(budget, 70, key)
 
+    def test_region_motifs_are_well_formed(self):
+        from quest import layout
+        from quest.art.scenery import SCENES, TITLES, region
+        for key in (*TITLES, *SCENES):
+            art = region(key)
+            parallaxes = {layer.parallax for layer in art.layers}
+            for motif in art.motifs:
+                label = f"{key}/{motif.name}"
+                self.assertEqual(len({(f.width, f.height) for f in motif.frames}), 1, label)
+                self.assertTrue(motif.parallax == 0 or motif.parallax in parallaxes, label)
+                if motif.flight:
+                    self.assertGreater(motif.period, 0, label)
+                    self.assertEqual(motif.flight[0][:2], (0, 0), label)
+                    self.assertEqual(motif.flight[-1][0], 100, label)
+                    self._assert_flight_loops_seamlessly(motif, label)
+
+    def _assert_flight_loops_seamlessly(self, motif, label):
+        from quest import layout
+        frame_w, frame_h = motif.frames[0].width, motif.frames[0].height
+        _, dx, dy = motif.flight[-1]
+        _, x0, y0 = motif.flight[0]
+        if motif.tile != (1, 1):
+            self.assertEqual((dx % frame_w, dy % frame_h), (0, 0), f"{label} must drift by whole tiles")
+            cols, rows = motif.tile
+            for sx, sy in ((x0, y0), (dx, dy)):
+                self.assertLessEqual(motif.x + sx, 0, label)
+                self.assertGreaterEqual(motif.x + sx + cols * frame_w, layout.WIDTH, label)
+                self.assertLessEqual(motif.y + sy, 0, label)
+                self.assertGreaterEqual(motif.y + sy + rows * frame_h, layout.HEIGHT, label)
+            return
+        for sx, sy in ((x0, y0), (dx, dy)):
+            x, y = motif.x + sx, motif.y + sy
+            out = x >= layout.WIDTH or x + frame_w <= 0 or y + frame_h <= 0 or y >= layout.HEIGHT
+            self.assertTrue(out, f"{label} must start and finish out of view")
+
+    def test_rain_tiles_seamlessly(self):
+        from quest.art.scenery import motifs
+        (tile,) = motifs.rain_tile(size=32, drops=40)
+        wrapped = raster.Canvas(32, 32, wrap_x=True)
+        wrapped.blit(tile, 0, 0)
+        self.assertEqual(wrapped.freeze().pixels, tile.pixels)
+
+    def test_hud_art_fits_its_slots(self):
+        from quest.art import hud
+        self.assertEqual((hud.portrait().width, hud.portrait().height), (hud.MEDALLION, hud.MEDALLION))
+        short = hud.nameplate("GHOUL", "JUL 4", 3, 2)
+        long = hud.nameplate("BROODMOTHER", "SEP 14", 144, 3, style="elite")
+        self.assertEqual(hud.crown().height, 6)
+        self.assertLess(short.width, long.width)
+        self.assertEqual(short.height, long.height)
+        self.assertLessEqual(hud.nameplate("THE ASHEN WYRM", "DEC 31", 9999, 5, style="boss").width, 230)
+
     def test_unknown_region_fails_loudly(self):
         from quest.art.scenery import region
         with self.assertRaises(ValueError):
@@ -235,8 +385,21 @@ class ArtContracts(unittest.TestCase):
 
     def test_effect_sheets_are_uniform(self):
         from quest.art import effects
-        for frames in (effects.fire_breath(), effects.ember_burst(), effects.ash_burst(), effects.bonfire()):
+        sheets = [effects.fire_breath(), effects.ember_burst(), effects.ash_burst(), effects.bonfire()]
+        sheets += [effects.hit_flash(blow, heavy) for blow in effects.CUT_ANGLES for heavy in (False, True)]
+        for frames in sheets:
             self.assertEqual(len({(f.width, f.height) for f in frames}), 1)
+
+    def test_walkers_square_up_instead_of_running_in_place(self):
+        from quest.art import monsters
+        for kind in ("wolf", "ghoul", "skeleton", "spider", "revenant"):
+            art = monsters.art(kind)
+            self.assertFalse(set(map(id, art.idle)) & set(map(id, art.move)), kind)
+        bat = monsters.art("bat")
+        self.assertIs(bat.idle, bat.move)
+        self.assertEqual(len(bat.frames), len(bat.move) + len(bat.attack) + 1 + len(bat.death))
+        self.assertIs(bat.frames[bat.index("idle", 1)], bat.move[1])
+        self.assertIs(bat.frames[bat.index("windup")], bat.attack[0])
 
 
 if __name__ == "__main__":
